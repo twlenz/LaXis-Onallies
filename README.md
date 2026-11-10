@@ -42,7 +42,7 @@ An area-control war game set in **La Crosse** and **Onalaska, Wisconsin**. La Cr
   5. Stretches the board slightly so the city core has room for pieces.
 - `tools/build_print.js` renders the board, counters, player aid, trackers and rulebook with headless Chromium.
 
-Neighborhood borders are approximate, not official boundaries.
+The board is a caricature, not a survey map: shapes are simplified and stretched, neighborhoods are centered on their main roads, and borders are approximate. Fonts: Patrick Hand and Bangers (SIL Open Font License, `game/fonts/`).
 
 ## Development
 

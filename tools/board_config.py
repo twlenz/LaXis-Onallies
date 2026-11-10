@@ -126,3 +126,13 @@ WEST = [
 CASS_STREET_BRIDGE = ((43.8130, -91.2585), (43.8150, -91.2635))
 PETTIBONE_LACRESCENT_BRIDGE = ((43.8190, -91.2765), (43.8230, -91.2990))
 WEST_CENTER = (43.8250, -91.3020)  # La Crescent bridge landing
+
+# Caricature landmarks (kind, (lat, lon))
+DOODLES = [
+    ("sixpack", (43.7900, -91.2760)),     # City Brewery: World's Largest Six-Pack (drawn in the river margin)
+    ("bluff", (43.7970, -91.1830)),       # Grandad Bluff
+    ("riverboat", (43.8400, -91.2850)),   # Mississippi riverboat
+    ("biplane", (43.9050, -91.2900)),     # over Lake Onalaska
+    ("zombiehand", (43.9800, -91.1500)),
+    ("zombiehand", (43.7250, -91.1000)),
+]

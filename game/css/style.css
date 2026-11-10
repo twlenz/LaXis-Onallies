@@ -1,3 +1,5 @@
+@font-face { font-family: "Patrick Hand"; src: url(../fonts/patrick-hand-latin-400-normal.woff2) format("woff2"); font-display: swap; }
+@font-face { font-family: "Bangers"; src: url(../fonts/bangers-latin-400-normal.woff2) format("woff2"); font-display: swap; }
 :root {
   --bg: #f3efe6;
   --panel: #fffdf8;
@@ -5,17 +7,17 @@
   --muted: #6b655c;
   --line: #d8d0c2;
   --lax: #c0392b;
-  --lax-soft: #f2c7c0;
+  --lax-soft: #f6a99f;
   --ona: #2c62b4;
-  --ona-soft: #c3d4f0;
+  --ona-soft: #9ec3f2;
   --fi: #8a8a8a;
   --zom: #3d8b2f;
   --zom-soft: #cfe8c4;
-  --water: #a9cbe6;
+  --water: #9fd3ee;
   --wall: #4a3b2a;
   --accent: #d98e04;
-  --unowned: #ece4d4;
-  --outside: #e4ddcd;
+  --unowned: #d7d7d2;
+  --outside: #f4e8bd;
   --mn: #d9d6cc;
 }
 @media (prefers-color-scheme: dark) {
@@ -41,7 +43,7 @@ header {
   display: flex; align-items: center; gap: 12px; padding: 8px 14px;
   border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap;
 }
-header h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
+header h1 { font-family: Bangers, system-ui, sans-serif; font-size: 24px; font-weight: 400; margin: 0; letter-spacing: 1px; }
 header h1 .lax { color: var(--lax); } header h1 .ona { color: var(--ona); }
 .badge { padding: 3px 9px; border-radius: 999px; font-weight: 600; font-size: 12px; color: #fff; }
 .badge.LAX { background: var(--lax); } .badge.ONA { background: var(--ona); } .badge.Z { background: var(--zom); }
@@ -101,14 +103,14 @@ aside {
 .err { color: var(--lax); font-weight: 600; min-height: 1.2em; }
 .chip-LAX { fill: var(--lax); } .chip-ONA { fill: var(--ona); } .chip-Z { fill: var(--zom); }
 /* map */
-.terr { stroke: #5e5546; stroke-width: 0.7; cursor: pointer; transition: fill .15s; }
-.terr.outside { stroke-dasharray: 2 1.5; }
+.terr { stroke: #3b2f22; stroke-width: 1.4; stroke-linejoin: round; cursor: pointer; transition: fill .15s; }
+.terr.outside { }
 .terr.sel { stroke: var(--accent); stroke-width: 3; }
 .terr.reach { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 3; }
 .terr.battle { stroke: #ff3b1f; stroke-width: 3; }
-.tlabel { font-size: 9px; font-weight: 600; fill: #2b2620; pointer-events: none; text-anchor: middle;
+.tlabel { font-family: 'Patrick Hand', 'Comic Sans MS', sans-serif; font-size: 12px; font-weight: 400; fill: #2b2620; pointer-events: none; text-anchor: middle;
   paint-order: stroke; stroke: rgba(255,255,255,.75); stroke-width: 2.5px; }
-.tvalue { font-size: 8px; fill: #2b2620; pointer-events: none; text-anchor: middle; paint-order: stroke; stroke: rgba(255,255,255,.75); stroke-width: 2px; }
+.tvalue { font-family: 'Patrick Hand', 'Comic Sans MS', sans-serif; font-size: 9.5px; fill: #2b2620; pointer-events: none; text-anchor: middle; paint-order: stroke; stroke: rgba(255,255,255,.75); stroke-width: 2px; }
 .wall { stroke: #3b2c1c; stroke-width: 4.5; stroke-linecap: round; fill: none; pointer-events: none; }
 .wall.broken { stroke: #b23a2a; stroke-width: 2.5; stroke-dasharray: 2 4; }
 .road { fill: none; stroke: #f7d66b; stroke-width: 1.6; pointer-events: none; opacity: .9; }
@@ -127,4 +129,4 @@ label.opt { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
   #mapwrap { min-height: 52vh; }
   header { padding: 6px 16px; }
 }
-.layer-gates, .layer-units, .layer-labels, .layer-kt, .layer-walls, .layer-arrows, .layer-roads, .layer-water, .layer-zom { pointer-events: none; }
+.layer-doodles, .layer-gates, .layer-units, .layer-labels, .layer-kt, .layer-walls, .layer-arrows, .layer-roads, .layer-water, .layer-zom { pointer-events: none; }
