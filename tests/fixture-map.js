@@ -32,7 +32,7 @@ for (const [a, b] of edges) {
   const A = byId[a], B = byId[b];
   if (A.inside !== B.inside) {
     const inside = A.inside ? a : b, outside = A.inside ? b : a;
-    walls.push({ id: `${inside}|${outside}`, inside, outside });
+    walls.push({ id: `${inside}|${outside}`, inside, outside, gate: inside === 'LN' && outside === 'EAST' });
   }
 }
 module.exports = { territories, walls, cityHalls: { LAX: 'LDT', ONA: 'ODT' } };

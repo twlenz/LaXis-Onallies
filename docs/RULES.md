@@ -21,11 +21,11 @@ Territories **outside the wall** (Holmen, Brice Prairie, the southern bluffs, et
 
 | Component | Count (print sheet) | Notes |
 |---|---|---|
-| Game board | 1 | Neighborhood-shaped territories built from OpenStreetMap data |
+| Game board | 1 | 24 × 27 inch poster, or 9 letter-size tiles |
 | La Crosse units (red) | 30 infantry, 10 tanks, 1 Gundersen Helicopter | |
 | Onalaska units (blue) | 30 infantry, 10 tanks, 1 Plane | |
 | Zombie units (green) | 50 | |
-| Wall pieces | one per wall segment on the board | Flip or remove when destroyed |
+| Wall pieces | 19 (W1–W19), 6 of them gates | Remove when destroyed |
 | Control markers | 2 × 40 | Mark who owns a territory |
 | Supply (SP) and Oil tracks | 1 each per player | Use the tracker sheet or coins |
 | Six-sided dice | 10+ | |
@@ -34,19 +34,31 @@ Stacks of identical units can be marked with "×5" chips, as in Axis & Allies.
 
 ## 3. The board
 
-- **Territories** follow real neighborhoods and municipal lines. Each territory shows:
+- **Inside the wall** (the territories you must hold to win):
+  - **La Crosse**: 16 neighborhoods (red border).
+  - **Onalaska**: 12 neighborhoods (blue border).
+  - **French Island**: 2 neutral territories (grey). French Island holds the **Airport** and connects to the mainland by the I-90 and Clinton Street bridges over the Black River.
+- **Outside the wall**: three **rings** of territories surround the cities on the north, east and south sides.
+  - **Ring 1** touches the wall.
+  - **Ring 2** is the middle ring. It includes **Holmen** (worth 3).
+  - **Ring 3** is the outer ring. Its six territories are the **zombie spawn points**, numbered **1–6**.
+  - Rings 1 and 2 are worth income, but they are exposed to the horde.
+- **West of the river** is a three-territory spoke across the **Cass Street bridge**: **Pettibone Park** (ring 1), **La Crescent, MN** (ring 2) and the **Minnesota Bluffs** (ring 3). Zombies do not spawn in the west, but zombies that end up there still march inward.
+- Each territory shows:
   - its **income value** (Supply Points, SP),
-  - a **fuel pump icon** for each **Kwik Trip** in it (each one gives **1 oil** per turn),
-  - a **zombie road arrow** (outside the wall, and most territories inside it) showing which way automatic zombies walk,
-  - a **spawn number 1–6** on the six outer road-entry territories (north, east and south of the cities).
-- **Inside the wall:** La Crosse (red border), Onalaska (blue border) and French Island (neutral, grey).
-- **Outside the wall:** everything else. These are income territories that are exposed to the horde.
-- **The wall** runs along every land border (and every bridge) between an inside territory and an outside territory. **There is no wall between La Crosse and Onalaska.** The Mississippi River on the west needs no wall, because zombies cannot cross open water.
-- **Water** (the Mississippi, Black River, La Crosse River marsh and Lake Onalaska) blocks movement. Territories on opposite banks are adjacent only where a **bridge** connects them; bridges are drawn on the board.
+  - **oil** equal to the number of **Kwik Trip** gas stations in it (each one gives **1 oil** per turn),
+  - a **zombie arrow** showing where automatic zombies move next.
+- **The wall** runs along every border between an inside territory and an outside territory, in 19 numbered segments (**W1–W19**). **There is no wall between La Crosse and Onalaska.** The Mississippi needs no wall, because zombies cannot cross open water.
+- **Highway gates** (yellow) are the wall segments where a major highway leaves the city:
+  - **North:** WI-35 and US-53.
+  - **East:** I-90, WI-16, and State Road / WI-33.
+  - **South:** Mormon Coulee Road (US-14/61 and WI-35), just before Southern Bluffs.
+  - **West:** the Cass Street bridge to Pettibone.
+- **Water** blocks all land movement except across the bridges drawn on the board.
 - **Special territories**
-  - **City Halls:** Downtown La Crosse and Downtown Onalaska. New units are placed here. Lose yours and you lose the game (§10).
-  - **Airport:** La Crosse Regional Airport on French Island. Whoever controls it can buy and fly aircraft.
-  - **Gundersen:** the hospital campus in La Crosse. It is the Gundersen Helicopter's home helipad.
+  - **City Halls (★):** Downtown La Crosse and Downtown Onalaska. New units are placed here. Lose yours and you lose the game (§10).
+  - **Airport (✈):** La Crosse Regional Airport on French Island. Whoever controls it can buy and fly aircraft.
+  - **Gundersen (✚):** the hospital campus in La Crosse. It is the Gundersen Helicopter's home helipad.
 
 ## 4. Setup
 
@@ -107,8 +119,9 @@ During combat move, a tank may move through an **empty** unowned or enemy territ
 
 ## 7. The wall
 
-- The wall keeps zombies out. **Your units pass through it freely**, because there are gates.
-- **Zombies cannot cross an intact wall segment.**
+- The wall keeps zombies out. **Zombies cannot cross an intact wall segment, and that includes gates.**
+- **Your land units may cross the wall only at a highway gate**, or through a segment that zombies have **torn down**. Moving between an inside territory and an outside territory across any other intact segment is not allowed.
+- **Aircraft fly over the wall**, and the helicopter can carry its infantry over it too.
 - **Breaching takes zombies two turns:**
   1. Zombies **arrive** in an outside territory next to the wall.
   2. On the **next** zombie turn, instead of moving, they **tear down** that wall segment. Remove the wall piece.
@@ -148,15 +161,15 @@ During the zombie turn, zombies that enter a territory with player units attack 
 ## 9. The zombie turn
 
 1. **Shamble**: move every zombie stack (see below).
-2. **Spawn**: roll **round ÷ 2 dice, rounded up** (round 1: 1 die; round 2: 1 die; round 3: 2 dice; round 6: 3 dice …). **Each 6 creates one zombie.** For each new zombie, roll another die for its **spawn point (1–6)** and place it there. New zombies do not move until the next zombie turn.
+2. **Spawn**: roll **round ÷ 2 dice, rounded up** (round 1: 1 die; round 2: 1 die; round 3: 2 dice; round 6: 3 dice …). **Each 6 creates one zombie.** For each new zombie, roll another die for its **spawn point (1–6, the outer-ring territories)** and place it there. New zombies do not move until the next zombie turn.
 3. **Feast**: resolve every battle where zombies share a territory with player units (§8).
 
 ### Automatic zombies (while both players are alive)
-Each zombie stack moves **one territory**, following the **road arrow** printed in its territory. The arrows follow the main highways (I-90, US-53, WI-16, WI-35, WI-33, US-14/61, WI-157) toward the nearest downtown.
-- If the arrow points across an **intact wall**, the stack **tears it down** instead of moving.
-- If a territory shows **two arrows**, roll a die: 1–3 takes the first arrow, 4–6 the second.
-- A stack in a **City Hall** territory (the end of the road) moves into the adjacent territory, not behind an intact wall, that holds the **most player units** (roll to break ties). If no adjacent territory holds player units, it stays where it is.
-- Zombies do not chase units off their road. They will walk straight into whatever stands in their way.
+Each zombie stack moves **one territory per turn, following the arrow** printed in its territory. Outside the wall, the arrows march **straight inward**: ring 3 to ring 2, ring 2 to ring 1, and ring 1 to the wall. Inside the city, the arrows lead toward the nearest downtown.
+- If the arrow points across an **intact wall** (gate or not), the stack **tears that segment down** instead of moving.
+- If a territory shows **two arrows**, roll a die: 1–3 takes the first arrow, 4–6 takes the second.
+- A stack in a **City Hall** territory (the end of the arrows) moves into the adjacent territory, not behind an intact wall, that holds the **most player units** (roll to break ties). If no adjacent territory holds player units, it stays where it is.
+- Zombies do not chase anything. They walk into whatever stands in their path.
 
 ### Controlled zombies (after a player falls)
 Once a player is defeated, **that player commands the zombie horde** for the rest of the game:
@@ -188,7 +201,9 @@ ZOMBIE: Shamble (or smash wall) → Spawn (ceil(round/2) dice, each 6 = zombie, 
 HIT:    roll ≤ value.   Zombies A3 D2 M1.   Infantry 3 SP A1 D2 M1.   Tank 6 SP A3 D3 M2 (1 oil).
         Helicopter (LAX) 10 SP A2 D3 M3 carries 1 inf.   Plane (ONA) 10 SP A4 D2 M4.
 WALL:   arrive → next zombie turn smash → next zombie turn enter.  Never rebuilt.
+        Land units cross only at highway gates or breaches. Aircraft fly over.
         Fortified (didn't move) units fire once per turn at Defense value, no return fire.
+RINGS:  zombies march ring 3 → ring 2 → ring 1 → wall → toward downtown, one step per turn.
 RISE:   units you lose when zombies beat you, or when you attack zombies and lose or retreat.
 WIN:    own every inside territory, zero zombies inside, at end of your turn AND start of your next.
 LOSE:   end your turn without your City Hall (or with no land units). Then you run the horde.
@@ -203,3 +218,7 @@ These rules were set from the designer's brief. The choices below were filled in
 - **Defeated players' surviving units become zombies.** This gives the new zombie commander a real force.
 - **One aircraft per side**, and both need the Airport to buy or fly.
 - **The zombie spawn rate starts low** (expected zombies per round = dice ÷ 6). If games feel too calm early, use the Outbreak variant (§4).
+- **Breaches count as openings for both sides.** Once zombies tear down a segment, your land units can also move through the gap.
+- **The I-90 bridge from French Island to Minnesota is out.** The only way west is the Cass Street bridge.
+- **Only Kwik Trip stations that sell gas count as oil.** Kwik Trip's La Crosse campus (distribution center, kitchen, support offices) does not.
+- **The board is stretched.** The city core gets more space than the countryside, so pieces fit. Shorelines and city outlines are simplified, and neighborhood borders are approximate.

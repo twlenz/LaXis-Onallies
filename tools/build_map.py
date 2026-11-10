@@ -1,512 +1,490 @@
 #!/usr/bin/env python3
-"""Build the LaXis & OnAllies board from cached OpenStreetMap data.
+"""Build the LaXis & OnAllies board.
 
-Inputs:  tools/cache/osm_*.json  (from fetch_osm.py), tools/board_config.py
-Outputs: game/js/mapdata.js      (map for the digital game)
-         print/board.svg         (printable board, via build_print.js)
-         tools/cache/report.txt  (territory / adjacency report)
+Inputs : tools/board_config.py   hand-drawn shorelines, city outline, neighborhood seeds
+         tools/data/roads.geojson Census TIGER primary/secondary roads (public domain)
+         tools/data/kwiktrips.csv Kwik Trip store list with coordinates
+Outputs: game/js/mapdata.js       board for the digital game and the print tools
+         tools/data/report.txt    territory / adjacency report
 
 Method
-  1. Project lon/lat to a local plane, then apply a mild separable fisheye so
-     the dense city neighborhoods get more room on the board.
-  2. Land = municipal polygons minus water polygons.
-  3. Each group's land (La Crosse, Onalaska, French Island, Outside) is split
-     into territories by Voronoi cells around hand-placed neighborhood seeds.
-  4. Adjacency = shared land border, plus bridges found by walking the major
-     road network across water.
-  5. Walls = every border between an inside and an outside territory.
-  6. Zombie road arrows = shortest path toward the nearest downtown, where
-     crossing a border on a major highway is cheaper than going cross-country.
+  * Work in a local kilometre grid.
+  * Inside the wall: Voronoi cells around neighborhood seeds, clipped to the
+    city outline and shoreline (French Island separately).
+  * Outside: three concentric distance bands around the wall (1.3 km, 3.4 km,
+    beyond), each cut into sectors by where they face the wall. Zombies step
+    one band inward per turn. West of the river, a three-territory spoke runs
+    across the Cass Street bridge (Pettibone, La Crescent, Minnesota bluffs).
+  * Walls on every inside/outside border; a wall is a GATE where a state, US
+    or interstate highway crosses it (plus the Cass Street bridge).
+  * Display: kilometres -> SVG units with a mild fisheye so the city core gets room.
 """
-import heapq
+import csv
 import json
 import math
 import pathlib
 import sys
+from collections import defaultdict, deque
 
-from shapely import STRtree, voronoi_polygons
-from shapely.geometry import (GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point,
-                              Polygon, box)
-from shapely.ops import linemerge, polylabel, transform, unary_union
+import shapely
+from shapely.geometry import LineString, MultiPoint, MultiPolygon, Point, Polygon, box, GeometryCollection, MultiLineString
+from shapely.ops import linemerge, polylabel, unary_union, transform
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import board_config as C  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-CACHE = ROOT / "tools" / "cache"
-
-S, N, W, E = 43.70, 44.00, -91.36, -91.03
-LAT0 = (S + N) / 2
-KX = math.cos(math.radians(LAT0))
-SCALE = 4200.0
-WIDTH = (E - W) * KX * SCALE
-HEIGHT = (N - S) * SCALE
-FISH_CENTER = (43.845, -91.232)  # between the two downtowns
-FISH_D = 1.25
+DATA = ROOT / "tools" / "data"
+F = C.FRAME
+LAT0 = (F["south"] + F["north"]) / 2
+LON0 = F["west"]
+KX = 111.32 * math.cos(math.radians(LAT0))
+KY = 110.57
 
 
-def proj_raw(lon, lat):
-    return ((lon - W) * KX * SCALE, (N - lat) * SCALE)
+def km(lat, lon):
+    return ((lon - LON0) * KX, (F["north"] - lat) * KY)
 
 
-CX, CY = proj_raw(FISH_CENTER[1], FISH_CENTER[0])
+def kpoly(pts):
+    return Polygon([km(a, b) for a, b in pts]).buffer(0)
 
 
-def fish1(v, c, lo, hi, d=FISH_D):
-    """Sarkar–Brown graphical fisheye along one axis (monotonic)."""
+def kline(pts):
+    return LineString([km(a, b) for a, b in pts])
+
+
+W_KM = (F["east"] - F["west"]) * KX
+H_KM = (F["north"] - F["south"]) * KY
+FRAME = box(0, 0, W_KM, H_KM)
+SVG_W = 1000.0
+SVG_S = SVG_W / W_KM
+SVG_H = H_KM * SVG_S
+FISH_C = km(43.845, -91.225)
+FISH_D = (0.6, 0.5)
+
+
+def fish1(v, c, lo, hi, d):
+    if d <= 0:
+        return v
     if v >= c:
         span = hi - c
-        t = min(max((v - c) / span, 0), 1.5)
+        t = (v - c) / span
         return c + span * ((d + 1) * t) / (d * t + 1)
     span = c - lo
-    t = min(max((c - v) / span, 0), 1.5)
+    t = (c - v) / span
     return c - span * ((d + 1) * t) / (d * t + 1)
 
 
-def proj(lon, lat):
-    x, y = proj_raw(lon, lat)
-    return (fish1(x, CX, 0, WIDTH), fish1(y, CY, 0, HEIGHT))
+def to_svg_xy(x, y):
+    return (fish1(x, FISH_C[0], 0, W_KM, FISH_D[0]) * SVG_S, fish1(y, FISH_C[1], 0, H_KM, FISH_D[1]) * SVG_S)
 
 
-def proj_xy(x, y, z=None):  # for shapely.ops.transform on lon/lat geometries
+def to_svg(g):
+    if not isinstance(g, Point):
+        g = shapely.segmentize(g, 0.12)
+    return transform(_tx, g)
+
+
+def _tx(x, y):
     import numpy as np
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    out = [proj(a, b) for a, b in zip(x.ravel(), y.ravel())]
-    xs = np.array([p[0] for p in out]).reshape(x.shape)
-    ys = np.array([p[1] for p in out]).reshape(y.shape)
-    return xs, ys
+    xs = np.asarray(x, dtype=float)
+    ys = np.asarray(y, dtype=float)
+    pts = [to_svg_xy(a, b) for a, b in zip(xs.ravel(), ys.ravel())]
+    return (np.array([p[0] for p in pts]).reshape(xs.shape), np.array([p[1] for p in pts]).reshape(ys.shape))
 
 
-def load(name):
-    return json.loads((CACHE / f"osm_{name}.json").read_text())["elements"]
-
-
-# ------------------------------------------------------------- geometry
-def ring_assemble(ways):
-    """Join way coordinate lists into closed rings."""
-    segs = [list(w) for w in ways if len(w) >= 2]
-    rings = []
-    while segs:
-        cur = segs.pop()
-        changed = True
-        while changed and cur[0] != cur[-1]:
-            changed = False
-            for i, s in enumerate(segs):
-                if s[0] == cur[-1]:
-                    cur += s[1:]
-                elif s[-1] == cur[-1]:
-                    cur += s[::-1][1:]
-                elif s[-1] == cur[0]:
-                    cur = s[:-1] + cur
-                elif s[0] == cur[0]:
-                    cur = s[::-1][:-1] + cur
-                else:
-                    continue
-                segs.pop(i)
-                changed = True
-                break
-        if len(cur) >= 4 and cur[0] == cur[-1]:
-            rings.append(cur)
-    return rings
-
-
-def coords(geom):
-    return [(p["lon"], p["lat"]) for p in geom]
-
-
-def rel_polygon(el):
-    outers, inners = [], []
-    for m in el.get("members", []):
-        if m.get("type") != "way" or "geometry" not in m:
-            continue
-        (inners if m.get("role") == "inner" else outers).append(coords(m["geometry"]))
-    polys = [Polygon(r).buffer(0) for r in ring_assemble(outers)]
-    holes = [Polygon(r).buffer(0) for r in ring_assemble(inners)]
-    if not polys:
-        return None
-    g = unary_union(polys)
-    if holes:
-        g = g.difference(unary_union(holes))
-    return g
-
-
-def way_polygon(el):
-    c = coords(el.get("geometry", []))
-    if len(c) >= 4 and c[0] == c[-1]:
-        return Polygon(c).buffer(0)
-    return None
-
-
-def polys_of(g):
+def polys(g):
     if g is None or g.is_empty:
         return []
     if isinstance(g, Polygon):
         return [g]
-    if isinstance(g, (MultiPolygon, GeometryCollection)):
+    if hasattr(g, "geoms"):
         out = []
         for x in g.geoms:
-            out += polys_of(x)
+            out += polys(x)
         return out
     return []
 
 
-def to_path(g, prec=1):
-    def ring(r):
-        pts = list(r.coords)
-        return "M" + "L".join(f"{x:.{prec}f},{y:.{prec}f}" for x, y in pts[:-1]) + "Z"
-    parts = []
-    for p in polys_of(g):
-        parts.append(ring(p.exterior))
-        parts += [ring(i) for i in p.interiors]
-    return "".join(parts)
-
-
-def line_path(g, prec=1):
-    lines = []
+def lines(g):
+    if g is None or g.is_empty:
+        return []
     if isinstance(g, LineString):
-        lines = [g]
-    elif isinstance(g, (MultiLineString, GeometryCollection)):
+        return [g]
+    if hasattr(g, "geoms"):
+        out = []
         for x in g.geoms:
-            if isinstance(x, LineString):
-                lines.append(x)
-            elif isinstance(x, MultiLineString):
-                lines += list(x.geoms)
+            out += lines(x)
+        return out
+    return []
+
+
+def path_d(g, prec=1):
     out = []
-    for ln in lines:
+    for p in polys(g):
+        for ring in [p.exterior] + list(p.interiors):
+            pts = list(ring.coords)[:-1]
+            out.append("M" + "L".join(f"{x:.{prec}f},{y:.{prec}f}" for x, y in pts) + "Z")
+    return "".join(out)
+
+
+def line_d(g, prec=1):
+    out = []
+    for ln in lines(g):
         pts = list(ln.coords)
         if len(pts) >= 2:
             out.append("M" + "L".join(f"{x:.{prec}f},{y:.{prec}f}" for x, y in pts))
     return "".join(out)
 
 
-# ------------------------------------------------------------- inputs
-def municipalities():
-    out = {}
-    for el in load("admin"):
-        if el["type"] != "relation":
-            continue
-        t = el.get("tags", {})
-        g = rel_polygon(el)
-        if g is None or g.is_empty:
-            continue
-        out.setdefault((t.get("admin_level"), t.get("name", "?")), []).append((t, g))
-    return out
-
-
-def find_muni(munis, name, levels=("8", "7")):
-    cands = []
-    for (lvl, nm), items in munis.items():
-        if lvl not in levels:
-            continue
-        for t, g in items:
-            if nm == name or nm in (f"City of {name}", f"Village of {name}"):
-                cands.append((lvl, t, g))
-    # prefer cities/villages (8) over towns (7) with the same name
-    cands.sort(key=lambda c: c[0], reverse=True)
-    return cands[0][2] if cands else None
-
-
-def find_town(munis, name):
-    for (lvl, nm), items in munis.items():
-        if nm in (f"Town of {name}",) or (lvl == "7" and nm == name):
-            return items[0][1]
-    return None
-
-
-def water_union():
-    gs = []
-    for el in load("water"):
-        g = rel_polygon(el) if el["type"] == "relation" else way_polygon(el)
-        if g is not None and not g.is_empty:
-            gs.append(g)
-    return unary_union(gs)
-
-
 def main():
-    munis = municipalities()
-    print("municipal polygons:", len(munis))
-    report = []
+    rep = []
+    # ---------------------------------------------------------------- land & water
+    water = Polygon([km(a, b) for a, b in C.WI_SHORE] + [km(a, b) for a, b in C.MN_SHORE]).buffer(0)
+    fi_land = kpoly(C.FRENCH_ISLAND)
+    pett_land = kpoly(C.PETTIBONE)
+    water = water.difference(fi_land).difference(pett_land).intersection(FRAME)
+    mn = Polygon([km(a, b) for a, b in C.MN_SHORE] + [km(F["north"], F["west"]), km(F["south"], F["west"])]).buffer(0)
+    mn = mn.intersection(FRAME).difference(water)
+    wi_land = FRAME.difference(water).difference(mn).difference(fi_land).difference(pett_land)
+    edge = kline(C.CITY_EDGE)
+    s_end, n_end = C.CITY_EDGE[-1], C.CITY_EDGE[0]
+    city_shape = Polygon([km(a, b) for a, b in C.CITY_EDGE] + [km(s_end[0], -91.31), km(n_end[0], -91.31)]).buffer(0)
+    inside_main = max(polys(city_shape.intersection(wi_land)), key=lambda p: p.area)
 
-    def P(g):
-        return transform(proj_xy, g)
-
-    frame = box(0, 0, WIDTH, HEIGHT)
-    water = P(water_union()).buffer(0).intersection(frame)
-    # ignore tiny ponds so they do not punch holes in neighborhoods
-    water = unary_union([p for p in polys_of(water) if p.area > 60])
-
-    lax = P(find_muni(munis, "La Crosse"))
-    ona = P(find_muni(munis, "Onalaska"))
-    fi = P(find_town(munis, "Campbell"))
-    assert lax is not None and ona is not None and fi is not None, "municipal polygons missing"
-    inside_union = unary_union([lax, ona, fi])
-    lax = lax.difference(water)
-    ona = ona.difference(water).difference(lax)
-    fi = fi.difference(water).difference(lax).difference(ona)
-
-    wi = []
-    for (lvl, nm), items in munis.items():
-        if lvl == "6" and nm in C.WISCONSIN_COUNTIES:
-            wi += [P(g) for _, g in items]
-    wisconsin = unary_union(wi).intersection(frame)
-    mn_land = frame.difference(wisconsin).difference(water)
-    outside = wisconsin.difference(water).difference(inside_union).buffer(0)
-
-    groups = {"LAX": (C.LAX, lax), "ONA": (C.ONA, ona), "FI": (C.FI, fi), "OUT": (C.OUT, outside)}
+    # ---------------------------------------------------------------- inside territories
     terr = {}
-    dropped = []
-    for gname, (defs, region) in groups.items():
-        region = region.buffer(0)
-        fixed = [d for d in defs if d.get("muni")]
-        free = [d for d in defs if not d.get("muni")]
-        for d in fixed:
-            m = find_muni(munis, d["muni"])
-            assert m is not None, d["muni"]
-            g = P(m).intersection(region)
-            terr[d["id"]] = dict(d, group=gname, geom=g)
-            region = region.difference(g)
-        seeds = [Point(*proj(d["seed"][1], d["seed"][0])) for d in free]
-        cells = voronoi_polygons(MultiPoint(seeds), extend_to=frame.buffer(2000))
-        cell_for = {}
+
+    def voronoi_into(defs, region, group):
+        seeds = [Point(*km(*d["seed"])) for d in defs]
+        for s, d in zip(seeds, defs):
+            assert region.buffer(0.01).contains(s), f"seed outside its region: {d['id']}"
+        cells = shapely.voronoi_polygons(MultiPoint(seeds), extend_to=FRAME.buffer(5))
         for cell in cells.geoms:
-            for i, s in enumerate(seeds):
+            for s, d in zip(seeds, defs):
                 if cell.contains(s):
-                    cell_for[i] = cell
-        for i, d in enumerate(free):
-            g = cell_for[i].intersection(region)
-            terr[d["id"]] = dict(d, group=gname, geom=g)
-        # tidy: keep the main part of each territory; reassign or drop crumbs
-        ids = [d["id"] for d in defs]
-        crumbs = []
-        for tid in ids:
-            parts = sorted(polys_of(terr[tid]["geom"]), key=lambda p: -p.area)
+                    g = cell.intersection(region)
+                    parts = polys(g)
+                    main = next((p for p in parts if p.buffer(0.01).contains(s)), max(parts, key=lambda p: p.area))
+                    terr[d["id"]] = dict(d, group=group, inside=True, ring=0, geom=main,
+                                         crumbs=[p for p in parts if p is not main])
+
+    voronoi_into(C.LAX + C.ONA, inside_main, None)
+    for d in C.LAX:
+        terr[d["id"]]["group"] = "LAX"
+    for d in C.ONA:
+        terr[d["id"]]["group"] = "ONA"
+    voronoi_into(C.FI, fi_land, "FI")
+
+    # ---------------------------------------------------------------- outside rings
+    outside = wi_land.difference(inside_main)
+    b1 = inside_main.buffer(C.RING_KM[0], quad_segs=16)
+    b2 = inside_main.buffer(C.RING_KM[1], quad_segs=16)
+    bands = [outside.intersection(b1), outside.intersection(b2).difference(b1), outside.difference(b2)]
+    # sectors by the position (0..1 along the city edge) of the nearest wall point
+    n_s = 600
+    samples = [edge.interpolate(i / (n_s - 1), normalized=True) for i in range(n_s)]
+    vor = shapely.voronoi_polygons(MultiPoint(samples), extend_to=FRAME.buffer(20))
+    cell_t = []
+    for cell in vor.geoms:
+        c = cell.representative_point()
+        best = min(range(n_s), key=lambda i: samples[i].distance(c) if cell.contains(samples[i]) else 1e9)
+        cell_t.append((cell, best / (n_s - 1)))
+    out_ids = []
+    for k, band in enumerate(bands):
+        n = C.RING_SECTORS[k]
+        for j in range(n):
+            lo, hi = j / n, (j + 1) / n
+            sector = unary_union([c for c, t in cell_t if lo <= t < hi or (j == n - 1 and t >= 1.0)])
+            g = band.intersection(sector)
+            parts = sorted(polys(g), key=lambda p: -p.area)
             if not parts:
-                raise SystemExit(f"{tid} has no land — move its seed")
-            seed_pt = Point(*proj(terr[tid]["seed"][1], terr[tid]["seed"][0])) if not terr[tid].get("muni") else None
-            main_part = parts[0]
-            if seed_pt is not None:
-                for p in parts:
-                    if p.buffer(1).contains(seed_pt):
-                        main_part = p
-                        break
-            terr[tid]["geom"] = main_part
-            crumbs += [p for p in parts if p is not main_part]
-        for p in crumbs:
-            best, best_len = None, 0
-            for tid in ids:
-                L = p.buffer(1.0).intersection(terr[tid]["geom"].boundary).length
-                if L > best_len:
-                    best, best_len = tid, L
-            if best and best_len > 2:
-                terr[best]["geom"] = unary_union([terr[best]["geom"], p]).buffer(0.01).buffer(-0.01)
-            elif p.area > 400:
-                near = min(ids, key=lambda t: terr[t]["geom"].distance(p))
-                terr[near]["geom"] = unary_union([terr[near]["geom"], p])
-            else:
-                dropped.append(p)
-
-    order = [d["id"] for d in C.LAX + C.ONA + C.FI + C.OUT]
-    for tid in order:
-        g = terr[tid]["geom"].simplify(0.6, preserve_topology=True)
-        terr[tid]["geom"] = g
-        terr[tid]["inside"] = terr[tid]["group"] != "OUT"
-        terr[tid]["adj"] = set()
-        terr[tid]["roadadj"] = set()
-
-    # ---- land adjacency
-    for i, a in enumerate(order):
-        for b in order[i + 1:]:
-            ga, gb = terr[a]["geom"], terr[b]["geom"]
-            if ga.distance(gb) > 1.5:
                 continue
-            shared = ga.buffer(1.5).intersection(gb.boundary)
-            if shared.length > 6:
-                terr[a]["adj"].add(b)
-                terr[b]["adj"].add(a)
+            tid = f"r{k + 1}_{j + 1}"
+            terr[tid] = dict(id=tid, group="OUT", inside=False, ring=k + 1, sector=j, tmid=(lo + hi) / 2,
+                             geom=parts[0], crumbs=parts[1:])
+            out_ids.append(tid)
 
-    # ---- roads: merge, project, walk across borders and bridges
-    roads = []
-    road_lines = []
-    for el in load("roads"):
-        t = el.get("tags", {})
-        c = coords(el.get("geometry", []))
-        if len(c) < 2:
+    # west spoke
+    for d in C.WEST:
+        if d["id"] == "w_pettibone":
+            g = pett_land
+        else:
+            r0, r1 = d["radius_km"]
+            c = Point(*km(*C.WEST_CENTER))
+            ring_shape = c.buffer(r1, quad_segs=24).difference(c.buffer(r0, quad_segs=24)) if r0 else c.buffer(r1, quad_segs=24)
+            g = max(polys(mn.intersection(ring_shape)), key=lambda p: p.area)
+        terr[d["id"]] = dict(d, group="OUT", inside=False, geom=g, crumbs=[], west=True)
+        out_ids.append(d["id"])
+    mn_rest = mn.difference(unary_union([terr["w_lacrescent"]["geom"], terr["w_mnbluffs"]["geom"]]))
+
+    # crumbs: merge into the touching territory of the same kind with the longest border, else drop
+    dropped = []
+    all_ids = list(terr)
+    for tid in all_ids:
+        for c in terr[tid].pop("crumbs"):
+            best, bl = None, 0.0
+            for o in all_ids:
+                if terr[o]["inside"] != terr[tid]["inside"]:
+                    continue
+                L = c.buffer(0.02).intersection(terr[o]["geom"].boundary).length
+                if L > bl:
+                    best, bl = o, L
+            if best and bl > 0.05:
+                terr[best]["geom"] = unary_union([terr[best]["geom"], c]).buffer(0.001).buffer(-0.001)
+            else:
+                dropped.append(c)
+    for tid in all_ids:  # keep single polygons
+        ps = polys(terr[tid]["geom"])
+        big = max(ps, key=lambda p: p.area)
+        dropped += [p for p in ps if p is not big]
+        terr[tid]["geom"] = big
+
+    # ---------------------------------------------------------------- adjacency
+    ids = list(terr)
+    adj = defaultdict(set)
+    shared = {}
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            ga, gb = terr[a]["geom"], terr[b]["geom"]
+            if ga.distance(gb) > 0.03:
+                continue
+            s = ga.buffer(0.03).intersection(gb.boundary)
+            L = sum(l.length for l in lines(s)) if not s.is_empty else 0
+            if L > 0.12:
+                adj[a].add(b)
+                adj[b].add(a)
+                shared[(a, b)] = shared[(b, a)] = s
+
+    def at(lat, lon):
+        p = Point(*km(lat, lon))
+        return min(ids, key=lambda t: terr[t]["geom"].distance(p))
+
+    bridges = []
+    for p1, p2, name in C.FI_BRIDGES + [(C.CASS_STREET_BRIDGE[0], C.CASS_STREET_BRIDGE[1], "Cass Street Bridge"),
+                                       (C.PETTIBONE_LACRESCENT_BRIDGE[0], C.PETTIBONE_LACRESCENT_BRIDGE[1], "US-14/61 Bridge")]:
+        a, b = at(*p1), at(*p2)
+        assert a != b, name
+        adj[a].add(b)
+        adj[b].add(a)
+        bridges.append(dict(a=a, b=b, name=name, geom=LineString([km(*p1), km(*p2)])))
+
+    # ---------------------------------------------------------------- walls & gates
+    walls = {}
+    for a in ids:
+        if not terr[a]["inside"]:
             continue
-        ln = P(LineString(c))
-        cls = t.get("highway", "")
-        roads.append((cls, t.get("ref", ""), ln))
-        if cls in ("motorway", "trunk", "primary", "motorway_link", "trunk_link", "secondary"):
-            road_lines.append(ln)
-    merged = linemerge(unary_union(road_lines))
-    tree_ids = order
-    tree = STRtree([terr[t]["geom"] for t in tree_ids])
+        for b in sorted(adj[a]):
+            if terr[b]["inside"]:
+                continue
+            br = next((x for x in bridges if {x["a"], x["b"]} == {a, b}), None)
+            if br:
+                g = br["geom"]
+                mid = g.interpolate(0.5, normalized=True)
+                (x0, y0), (x1, y1) = g.coords[0], g.coords[-1]
+                L = math.hypot(x1 - x0, y1 - y0)
+                nx, ny = -(y1 - y0) / L * 0.25, (x1 - x0) / L * 0.25
+                wg = LineString([(mid.x - nx, mid.y - ny), (mid.x + nx, mid.y + ny)])
+            else:
+                wg = linemerge(shared[(a, b)]) if not isinstance(shared[(a, b)], LineString) else shared[(a, b)]
+            walls[f"{a}|{b}"] = dict(id=f"{a}|{b}", inside=a, outside=b, geom=wg, gate=bool(br), gateAt=None,
+                                     gateRoads=set(["US-14/61 (Cass St)"] if br else []))
+            if br:
+                walls[f"{a}|{b}"]["gateAt"] = wg.interpolate(0.5, normalized=True)
+
+    feats = json.loads((DATA / "roads.geojson").read_text())["features"]
+    road_geoms = []
+    for f in feats:
+        p = f["properties"]
+        if p["rttyp"] == "C":
+            continue
+        ln = LineString([km(lat, lon) for lon, lat in f["geometry"]["coordinates"]])
+        road_geoms.append((p["name"], p["rttyp"], ln))
+    tree = shapely.STRtree([terr[t]["geom"] for t in ids])
 
     def which(pt):
         for k in tree.query(pt):
-            if terr[tree_ids[k]]["geom"].buffer(0.5).contains(pt):
-                return tree_ids[k]
+            if terr[ids[k]]["geom"].covers(pt):
+                return ids[k]
         return None
 
-    bridges = []
-    lines = list(merged.geoms) if hasattr(merged, "geoms") else [merged]
-    for ln in lines:
-        n = max(2, int(ln.length / 3))
-        seq = [which(ln.interpolate(k / n, normalized=True)) for k in range(n + 1)]
-        prev, gap_start, gap = None, None, 0
-        for k, cur in enumerate(seq):
-            if cur is None:
-                if prev is not None and gap == 0:
-                    gap_start = k
-                gap += 1
-                continue
-            if prev is not None and cur != prev:
-                if gap == 0 or cur in terr[prev]["adj"]:
-                    terr[prev]["roadadj"].add(cur)
-                    terr[cur]["roadadj"].add(prev)
-                elif gap * 3 < 90:  # crossing water on a bridge
-                    a_pt = ln.interpolate((gap_start - 1) / n, normalized=True)
-                    b_pt = ln.interpolate(k / n, normalized=True)
-                    terr[prev]["adj"].add(cur)
-                    terr[cur]["adj"].add(prev)
-                    terr[prev]["roadadj"].add(cur)
-                    terr[cur]["roadadj"].add(prev)
-                    bridges.append((prev, cur, LineString([a_pt, b_pt])))
-            prev, gap = cur, 0
-    # de-duplicate bridges per pair (keep shortest)
-    bpair = {}
-    for a, b, g in bridges:
-        k = tuple(sorted((a, b)))
-        if k not in bpair or g.length < bpair[k].length:
-            bpair[k] = g
+    for name, rt, ln in road_geoms:
+        n = max(2, int(ln.length / 0.04))
+        prev = None
+        for i in range(n + 1):
+            pt = ln.interpolate(i / n, normalized=True)
+            cur = which(pt)
+            if cur and prev and cur != prev:
+                key = f"{prev}|{cur}" if terr[prev]["inside"] else f"{cur}|{prev}"
+                if key in walls:
+                    w = walls[key]
+                    w["gate"] = True
+                    w["gateRoads"].add(name)
+                    if w["gateAt"] is None:
+                        w["gateAt"] = w["geom"].interpolate(w["geom"].project(pt))
+            if cur:
+                prev = cur
 
-    # ---- walls
-    walls = []
-    for a in order:
-        if not terr[a]["inside"]:
-            continue
-        for b in sorted(terr[a]["adj"]):
-            if terr[b]["inside"]:
-                continue
-            k = tuple(sorted((a, b)))
-            if k in bpair:
-                bl = bpair[k]
-                mid = bl.interpolate(0.5, normalized=True)
-                dx = bl.coords[-1][0] - bl.coords[0][0]
-                dy = bl.coords[-1][1] - bl.coords[0][1]
-                L = math.hypot(dx, dy) or 1
-                nx, ny = -dy / L * 7, dx / L * 7
-                g = LineString([(mid.x - nx, mid.y - ny), (mid.x + nx, mid.y + ny)])
-            else:
-                g = terr[a]["geom"].boundary.intersection(terr[b]["geom"].buffer(1.5))
-                g = linemerge(g) if not isinstance(g, LineString) and not g.is_empty else g
-            walls.append(dict(id=f"{a}|{b}", inside=a, outside=b, path=line_path(g)))
-
-    # ---- zombie arrows (Dijkstra toward nearest downtown)
-    targets = ["lax_downtown", "ona_downtown"]
-    dist = {t: math.inf for t in order}
-    pq = []
+    # ---------------------------------------------------------------- zombie routes
+    targets = [C.LAX[0]["id"], C.ONA[0]["id"]]
+    dist = {t: math.inf for t in ids}
+    dq = deque()
     for t in targets:
         dist[t] = 0
-        heapq.heappush(pq, (0, t))
+        dq.append(t)
+    while dq:
+        u = dq.popleft()
+        for v in adj[u]:
+            if dist[v] == math.inf:
+                dist[v] = dist[u] + 1
+                dq.append(v)
 
-    def w(a, b):
-        return 1.0 if b in terr[a]["roadadj"] else 2.6
+    def border_len(a, b):
+        s = shared.get((a, b))
+        return sum(l.length for l in lines(s)) if s is not None else 0
 
-    while pq:
-        d, u = heapq.heappop(pq)
-        if d > dist[u]:
-            continue
-        for v in terr[u]["adj"]:
-            nd = d + w(u, v)
-            if nd < dist[v] - 1e-9:
-                dist[v] = nd
-                heapq.heappush(pq, (nd, v))
-    for t in order:
+    for t in ids:
+        T = terr[t]
         if t in targets:
-            terr[t]["zombieNext"] = []
+            T["zombieNext"] = []
             continue
-        best = sorted([v for v in terr[t]["adj"] if abs(dist[v] + w(t, v) - dist[t]) < 1e-6],
-                      key=lambda v: (0 if v in terr[t]["roadadj"] else 1, dist[v]))
-        terr[t]["zombieNext"] = best[:2]
-        if not best:
-            raise SystemExit(f"{t} has no route to a downtown")
+        cands = [v for v in adj[t] if dist[v] == dist[t] - 1]
+        if not T["inside"]:
+            # march inward: prefer the next ring in (then the wall), longest shared border
+            ring = T.get("ring", 9)
+            inward = [v for v in adj[t] if terr[v]["inside"] or terr[v].get("ring", 9) < ring]
+            cands = inward or cands
+            cands.sort(key=lambda v: (-border_len(t, v)))
+            T["zombieNext"] = cands[:1]
+        else:
+            cands.sort(key=lambda v: -border_len(t, v))
+            T["zombieNext"] = cands[:2]
+        assert T["zombieNext"], f"{t} has nowhere to go"
 
-    # ---- POIs: Kwik Trips
+    # ---------------------------------------------------------------- names, values, spawn
+    for t in out_ids:
+        T = terr[t]
+        if T.get("west"):
+            continue
+        g = T["geom"]
+        found = [p for p in C.PLACES if g.covers(Point(*km(p[1], p[2])))]
+        found.sort(key=lambda p: -p[3])
+        dir_name = sector_dir(T["tmid"])
+        if found:
+            T["name"] = found[0][0]
+        elif T["ring"] == 1:
+            inner = next((v for v in T["zombieNext"] if terr[v]["inside"]), T["zombieNext"][0])
+            T["name"] = f'{terr[inner].get("short", terr[inner]["name"])} Outskirts'
+        else:
+            T["name"] = f'{dir_name} {"Coulees" if T["ring"] == 2 else "Farmland"}'
+        T["short"] = T["name"]
+        T["value"] = C.RING_VALUE[T["ring"] - 1]
+        if found and found[0][3] >= 2 and T["ring"] < 3:
+            T["value"] = found[0][3]
+    ring3 = sorted([t for t in out_ids if terr[t].get("ring") == 3 and not terr[t].get("west")], key=lambda t: terr[t]["tmid"])
+    assert len(ring3) == 6, ring3
+    for i, t in enumerate(ring3):
+        terr[t]["spawn"] = i + 1
+        hw = sorted({n for n, rt, ln in road_geoms if rt in "IUS" and ln.intersects(terr[t]["geom"])})
+        terr[t]["roads"] = hw
+    # de-duplicate names (west to east along the wall)
+    groups = defaultdict(list)
+    for t in out_ids:
+        groups[terr[t]["name"]].append(t)
+    for name, ts in groups.items():
+        if len(ts) < 2:
+            continue
+        ts.sort(key=lambda t: terr[t].get("tmid", 0))
+        tags = ["West", "East"] if len(ts) == 2 else [str(i + 1) for i in range(len(ts))]
+        for t, tag in zip(ts, tags):
+            terr[t]["name"] = terr[t]["short"] = f"{name} {tag}"
+
+    # ---------------------------------------------------------------- Kwik Trips
     kts = []
-    for el in load("pois"):
-        t = el.get("tags", {})
-        nm = t.get("brand", "") + " " + t.get("name", "")
-        if "Kwik" not in nm:
+    for r in csv.DictReader(open(DATA / "kwiktrips.csv")):
+        if r["Sells Gas"] != "Yes":
             continue
-        if t.get("amenity") not in (None, "fuel") and t.get("shop") not in ("convenience", None):
-            pass
-        lat = el.get("lat", el.get("center", {}).get("lat"))
-        lon = el.get("lon", el.get("center", {}).get("lon"))
-        if lat is None:
+        p = Point(*km(float(r["Latitude"]), float(r["Longitude"])))
+        t = which(p) or min(ids, key=lambda x: terr[x]["geom"].distance(p))
+        if terr[t]["geom"].distance(p) > 0.6:
             continue
-        kts.append(dict(lat=lat, lon=lon, name=t.get("name", "Kwik Trip"), street=t.get("addr:street", ""),
-                        num=t.get("addr:housenumber", "")))
-    # de-duplicate (store mapped as node + building)
-    uniq = []
-    for k in kts:
-        x, y = proj(k["lon"], k["lat"])
-        if all(math.hypot(x - u["x"], y - u["y"]) > 4 for u in uniq):
-            uniq.append(dict(k, x=round(x, 1), y=round(y, 1)))
-    for tid in order:
-        terr[tid]["kwikTrips"] = 0
-    kt_out = []
-    for k in uniq:
-        tid = which(Point(k["x"], k["y"]))
-        if tid is None:
-            continue
-        terr[tid]["kwikTrips"] += 1
-        kt_out.append(dict(x=k["x"], y=k["y"], name=f'{k["name"]} {k["num"]} {k["street"]}'.strip(), tid=tid))
+        kts.append(dict(p=p, tid=t, name=f'{r["Store Name"].title()} – {r["Address"].title()}, {r["City"].title()}'))
+    for t in ids:
+        terr[t]["kwikTrips"] = sum(1 for k in kts if k["tid"] == t)
 
-    # ---- assemble output
+    # ---------------------------------------------------------------- output
     out_t = []
-    for tid in order:
-        d = terr[tid]
-        g = d["geom"]
-        main = max(polys_of(g), key=lambda p: p.area)
-        lab = polylabel(main, tolerance=0.5)
-        so = {"LAX": "LAX", "ONA": "ONA"}.get(d["group"])
+    order = [d["id"] for d in C.LAX + C.ONA + C.FI] + sorted(out_ids, key=lambda t: (terr[t].get("ring", 0), t))
+    for t in order:
+        T = terr[t]
+        gs = to_svg(T["geom"])
+        lab = polylabel(gs, tolerance=0.5)
+        so = T["group"] if T["group"] in ("LAX", "ONA") else None
+        start = T.get("start") or (dict(C.DEFAULT_START) if so else {})
+        if t in C.EXTRA_START:
+            start = C.EXTRA_START[t]
         out_t.append(dict(
-            id=tid, name=d["name"], short=d.get("short", d["name"]), group=d["group"],
-            region={"LAX": "La Crosse", "ONA": "Onalaska", "FI": "French Island", "OUT": "Outside"}[d["group"]],
-            inside=d["inside"], value=d.get("value", 0), kwikTrips=d["kwikTrips"],
-            special=d.get("special", []), spawn=d.get("spawn"), startOwner=so,
-            startUnits=d.get("start", {}), adj=sorted(d["adj"]), roadAdj=sorted(d["roadadj"]),
-            zombieNext=d["zombieNext"], label=[round(lab.x, 1), round(lab.y, 1)],
-            area=round(g.area), path=to_path(g)))
-    water_paths = [to_path(p.simplify(0.8)) for p in polys_of(water) if p.area > 150]
-    backdrop = [dict(path=to_path(p.simplify(1.0))) for p in polys_of(mn_land) if p.area > 150]
-    backdrop += [dict(path=to_path(p)) for p in dropped if p.area > 30]
+            id=t, name=T["name"], short=T.get("short", T["name"]), group=T["group"],
+            region={"LAX": "La Crosse", "ONA": "Onalaska", "FI": "French Island", "OUT": "Outside"}[T["group"]],
+            inside=T["inside"], ring=T.get("ring", 0), value=T.get("value", 0), kwikTrips=T["kwikTrips"],
+            special=T.get("special", []), spawn=T.get("spawn"), startOwner=so, startUnits=start,
+            adj=sorted(adj[t]), zombieNext=T["zombieNext"], label=[round(lab.x, 1), round(lab.y, 1)],
+            area=round(gs.area), path=path_d(gs), roads=T.get("roads", [])))
+    walls_out = []
+    for i, w in enumerate(sorted(walls.values(), key=lambda w: (w["inside"], w["outside"]))):
+        ga = to_svg(w["geom"])
+        gate_xy = None
+        if w["gate"]:
+            gp = to_svg(w["gateAt"]) if w["gateAt"] is not None else ga.interpolate(0.5, normalized=True)
+            gate_xy = [round(gp.x, 1), round(gp.y, 1)]
+        walls_out.append(dict(id=w["id"], no=i + 1, inside=w["inside"], outside=w["outside"], gate=w["gate"],
+                              gateAt=gate_xy, gateRoads=sorted(w["gateRoads"]), path=line_d(ga)))
     road_out = []
-    for cls, ref, ln in roads:
-        if cls in ("motorway", "trunk", "primary"):
-            road_out.append(dict(cls=cls, ref=ref, path=line_path(ln.simplify(0.8))))
-    bridge_out = [dict(a=a, b=b, path=line_path(g)) for (a, b), g in bpair.items()]
-    labels = []
+    for name, rt, ln in road_geoms:
+        g = ln.intersection(FRAME)
+        if g.is_empty:
+            continue
+        cls = {"I": "motorway", "U": "trunk", "S": "primary"}.get(rt, "secondary")
+        road_out.append(dict(cls=cls, name=name, path=line_d(to_svg(g).simplify(0.4))))
+    water_out = [path_d(to_svg(p).simplify(0.3)) for p in polys(water)]
+    backdrop = [dict(path=path_d(to_svg(p).simplify(0.4)), kind="mn") for p in polys(mn_rest)]
+    backdrop += [dict(path=path_d(to_svg(p).simplify(0.4)), kind="island") for p in dropped if p.area > 0.02]
+    river = to_svg(kline(C.LA_CROSSE_RIVER).intersection(inside_main.buffer(-0.02)))
+    kt_out = []
+    for k in kts:
+        sp = to_svg(k["p"])
+        kt_out.append(dict(x=round(sp.x, 1), y=round(sp.y, 1), name=k["name"], tid=k["tid"]))
+    br_out = [dict(a=b["a"], b=b["b"], name=b["name"], path=line_d(to_svg(b["geom"]))) for b in bridges]
     mapdata = dict(
-        viewBox=[0, 0, round(WIDTH, 1), round(HEIGHT, 1)],
-        attribution="Map data © OpenStreetMap contributors (ODbL)",
-        territories=out_t, walls=walls, water=water_paths, backdrop=backdrop, roads=road_out,
-        bridges=bridge_out, kwikTrips=kt_out, labels=labels,
-        cityHalls={"LAX": "lax_downtown", "ONA": "ona_downtown"},
+        viewBox=[0, 0, round(SVG_W, 1), round(SVG_H, 1)],
+        attribution="Roads: US Census TIGER/Line. Kwik Trip locations: Kwik Trip store list. Shorelines and outlines hand-drawn.",
+        territories=out_t, walls=walls_out, water=water_out, backdrop=backdrop, roads=road_out,
+        rivers=[line_d(river)], bridges=br_out, kwikTrips=kt_out,
+        cityHalls={"LAX": C.LAX[0]["id"], "ONA": C.ONA[0]["id"]},
+        mnLabel=[round(v, 1) for v in to_svg_xy(*km(43.935, -91.385))],
     )
-    js = ("/* Generated by tools/build_map.py from OpenStreetMap data (ODbL). Do not edit by hand. */\n"
-          "(function (root) {\nconst MAP = " + json.dumps(mapdata, separators=(",", ":")) + ";\n"
-          "if (typeof module === 'object' && module.exports) module.exports = MAP; else root.LAXIS_MAP = MAP;\n"
+    js = ("/* Generated by tools/build_map.py. Do not edit by hand. */\n(function (root) {\nconst MAP = "
+          + json.dumps(mapdata, separators=(",", ":"), ensure_ascii=False)
+          + ";\nif (typeof module === 'object' && module.exports) module.exports = MAP; else root.LAXIS_MAP = MAP;\n"
           "})(typeof self !== 'undefined' ? self : this);\n")
     (ROOT / "game" / "js" / "mapdata.js").write_text(js)
-    # report
     for t in out_t:
-        report.append(f'{t["id"]:16} {t["group"]:3} v{t["value"]} kt{t["kwikTrips"]} area{t["area"]:>7} '
-                      f'adj={",".join(t["adj"])} next={",".join(t["zombieNext"])}')
-    report.append(f"walls: {len(walls)}  bridges: {len(bridge_out)}  kwik trips placed: {len(kt_out)} / found {len(uniq)}")
-    (CACHE / "report.txt").write_text("\n".join(report))
-    print("\n".join(report))
+        rep.append(f'{t["id"]:18} {t["group"]:3} r{t["ring"]} v{t["value"]} kt{t["kwikTrips"]} sp{t["spawn"] or "-"} '
+                   f'{t["name"][:34]:34} next={",".join(t["zombieNext"])} adj={",".join(t["adj"])}')
+    for w in walls_out:
+        rep.append(f'W{w["no"]:<3} {w["id"]:30} {"GATE " + ", ".join(w["gateRoads"]) if w["gate"] else ""}')
+    rep.append(f"territories {len(out_t)}  walls {len(walls_out)}  gates {sum(w['gate'] for w in walls_out)}  kwik trips {len(kt_out)}")
+    (DATA / "report.txt").write_text("\n".join(rep))
+    print("\n".join(rep))
+
+
+def sector_dir(t):
+    # t runs along the city edge from the north-west (0) round the east to the south (1)
+    dirs = ["Northwest", "North", "Northeast", "East", "Southeast", "South"]
+    return dirs[min(5, int(t * 6))]
 
 
 if __name__ == "__main__":

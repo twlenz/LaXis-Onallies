@@ -55,6 +55,21 @@ test('movement: capture empty territory, oil for tanks, walls do not block playe
   assert.equal(g.s.units[tank].at, 'EAST');
 });
 
+test('land units cross the wall only at gates or breaches; aircraft fly over', () => {
+  const g = newGame();
+  skipTo(g, 'combatMove');
+  const gunInf = ids(g, 'GUN', 'LAX', 'inf')[0];
+  assert.equal(g.findPath([gunInf], 'GUN', 'SOUTH'), null, 'GUN|SOUTH is a plain wall');
+  g.s.walls['GUN|SOUTH'] = false;
+  assert.ok(g.findPath([gunInf], 'GUN', 'SOUTH'), 'breached wall can be crossed');
+  const lnInf = ids(g, 'LN', 'LAX', 'inf')[0];
+  assert.ok(g.findPath([lnInf], 'LN', 'EAST'), 'LN|EAST is a gate');
+  g.s.territories.FI.owner = 'LAX';
+  const heli = g._addUnit('heli', 'LAX', 'LDT');
+  g.s.walls['GUN|SOUTH'] = true;
+  assert.ok(g.findPath([heli.id], 'LDT', 'SOUTH'), 'helicopter flies over the wall');
+});
+
 test('zombies: one turn next to the wall, next turn smash it, then walk in', () => {
   const g = newGame();
   g._addUnit('zombie', 'Z', 'EAST');
