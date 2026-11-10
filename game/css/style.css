@@ -126,3 +126,4 @@ label.opt { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
   #mapwrap { min-height: 52vh; }
   header { padding: 6px 16px; }
 }
+.layer-units, .layer-labels, .layer-kt, .layer-walls, .layer-arrows, .layer-roads, .layer-water, .layer-zom { pointer-events: none; }
