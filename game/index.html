@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaXis &amp; OnAllies</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1><span class="lax">LaXis</span> &amp; <span class="ona">OnAllies</span></h1>
+  <span id="round"></span>
+  <span id="sidebadge" class="badge"></span>
+  <span id="phase" class="phase"></span>
+  <span class="spacer"></span>
+  <button id="undoBtn" title="Reset this phase to how it started">Undo phase</button>
+  <button id="endBtn" class="primary">End phase</button>
+  <button id="menuBtn">Menu</button>
+</header>
+<main>
+  <div id="mapwrap">
+    <svg id="map" xmlns="http://www.w3.org/2000/svg" aria-label="Map of La Crosse and Onalaska"></svg>
+    <div class="zoomctl">
+      <button id="zin" aria-label="Zoom in">+</button>
+      <button id="zout" aria-label="Zoom out">−</button>
+      <button id="zfit" aria-label="Fit map" style="font-size:12px">fit</button>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--lax-soft);border:1px solid var(--lax)"></i>La Crosse</span>
+      <span><i style="background:var(--ona-soft);border:1px solid var(--ona)"></i>Onalaska</span>
+      <span><i style="background:var(--zom)"></i>Zombies</span>
+      <span><i style="background:var(--wall)"></i>Wall</span>
+      <span><i style="background:#e8742a"></i>Kwik Trip</span>
+    </div>
+  </div>
+  <aside>
+    <div id="side"></div>
+    <div id="log" aria-live="polite"></div>
+  </aside>
+</main>
+
+<dialog id="newDlg">
+  <h2>New game</h2>
+  <p class="help">Two players share this screen (hot-seat). You can also let the computer play one or both sides.</p>
+  <label class="opt"><input type="checkbox" id="optCpuLAX"> <span>Computer plays <b style="color:var(--lax)">La Crosse</b></span></label>
+  <label class="opt"><input type="checkbox" id="optCpuONA"> <span>Computer plays <b style="color:var(--ona)">Onalaska</b></span></label>
+  <label class="opt"><input type="checkbox" id="optOutbreak"> <span><b>Outbreak variant</b>: one zombie starts on each spawn point.</span></label>
+  <label class="opt"><span>Wall fire uses</span>
+    <select id="optFort"><option value="def" selected>Defense value (inf 2, tank 3)</option><option value="att">Attack value (inf 1, tank 3)</option></select>
+  </label>
+  <label class="opt"><span>Seed (optional)</span><input id="optSeed" type="number" placeholder="random"></label>
+  <div class="row" style="justify-content:flex-end;margin-top:12px">
+    <button id="resumeBtn">Continue saved game</button>
+    <button id="startBtn" class="primary">Start</button>
+  </div>
+</dialog>
+
+<dialog id="menuDlg">
+  <h2>Menu</h2>
+  <div class="row"><button id="mNew">New game…</button></div>
+  <div class="row"><button id="mExport">Download save file</button>
+    <label><button id="mImportBtn">Load save file…</button><input id="mImport" type="file" accept=".json" hidden></label></div>
+  <div class="row"><a href="../docs/RULES.md" target="_blank" rel="noopener">Rulebook</a></div>
+  <div class="row"><label><input type="checkbox" id="mArrows" checked> Show zombie road arrows</label></div>
+  <div class="row"><label><input type="checkbox" id="mRoads" checked> Show highways</label></div>
+  <div class="row" style="justify-content:flex-end"><button id="mClose" class="primary">Close</button></div>
+</dialog>
+
+<dialog id="overDlg">
+  <h2 id="overTitle"></h2>
+  <p id="overText"></p>
+  <div class="row" style="justify-content:flex-end"><button id="overNew" class="primary">New game</button><button id="overClose">Look at the board</button></div>
+</dialog>
+
+<script src="js/engine.js"></script>
+<script src="js/mapdata.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
