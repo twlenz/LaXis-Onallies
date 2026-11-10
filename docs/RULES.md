@@ -25,7 +25,7 @@ Territories **outside the wall** (Holmen, Brice Prairie, the southern bluffs, et
 | La Crosse units (red) | 30 infantry, 10 tanks, 1 Gundersen Helicopter | |
 | Onalaska units (blue) | 30 infantry, 10 tanks, 1 Plane | |
 | Zombie units (green) | 50 | |
-| Wall pieces | 19 (W1–W19), 6 of them gates | Remove when destroyed |
+| Wall pieces | one per numbered segment (W1, W2, …); 6 are gates | Remove when destroyed |
 | Control markers | 2 × 40 | Mark who owns a territory |
 | Supply (SP) and Oil tracks | 1 each per player | Use the tracker sheet or coins |
 | Six-sided dice | 10+ | |
@@ -48,7 +48,7 @@ Stacks of identical units can be marked with "×5" chips, as in Axis & Allies.
   - its **income value** (Supply Points, SP),
   - **oil** equal to the number of **Kwik Trip** gas stations in it (each one gives **1 oil** per turn),
   - a **zombie arrow** showing where automatic zombies move next.
-- **The wall** runs along every border between an inside territory and an outside territory, in 19 numbered segments (**W1–W19**). **There is no wall between La Crosse and Onalaska.** The Mississippi needs no wall, because zombies cannot cross open water.
+- **The wall** runs along every border between an inside territory and an outside territory, in numbered segments (**W1, W2, …**). **There is no wall between La Crosse and Onalaska.** The Mississippi needs no wall, because zombies cannot cross open water.
 - **Highway gates** (yellow) are the wall segments where a major highway leaves the city:
   - **North:** WI-35 and US-53.
   - **East:** I-90, WI-16, and State Road / WI-33.

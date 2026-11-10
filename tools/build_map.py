@@ -63,7 +63,7 @@ SVG_W = 1000.0
 SVG_S = SVG_W / W_KM
 SVG_H = H_KM * SVG_S
 FISH_C = km(43.845, -91.225)
-FISH_D = (0.6, 0.5)
+FISH_D = (1.1, 0.8)
 
 
 def fish1(v, c, lo, hi, d):
@@ -155,11 +155,30 @@ def main():
     city_shape = Polygon([km(a, b) for a, b in C.CITY_EDGE] + [km(s_end[0], -91.31), km(n_end[0], -91.31)]).buffer(0)
     inside_main = max(polys(city_shape.intersection(wi_land)), key=lambda p: p.area)
 
+    # ---------------------------------------------------------------- major roads (loaded early)
+    road_geoms = []
+    for f in json.loads((DATA / "roads.geojson").read_text())["features"]:
+        p = f["properties"]
+        if p["rttyp"] == "C":
+            continue
+        road_geoms.append((p["name"], p["rttyp"], LineString([km(lat, lon) for lon, lat in f["geometry"]["coordinates"]])))
+    road_union = unary_union([ln for _, _, ln in road_geoms])
+
+    def snap_to_road(pt, others, max_km=0.5, min_sep=0.45):
+        q = road_union.interpolate(road_union.project(pt))
+        if q.distance(pt) > max_km or any(q.distance(o) < min_sep for o in others):
+            return pt
+        return q
+
     # ---------------------------------------------------------------- inside territories
     terr = {}
 
     def voronoi_into(defs, region, group):
-        seeds = [Point(*km(*d["seed"])) for d in defs]
+        seeds = []
+        for d in defs:  # put each neighborhood astride its main road
+            raw = Point(*km(*d["seed"]))
+            sp = snap_to_road(raw, seeds)
+            seeds.append(sp if region.buffer(-0.05).contains(sp) else raw)
         for s, d in zip(seeds, defs):
             assert region.buffer(0.01).contains(s), f"seed outside its region: {d['id']}"
         cells = shapely.voronoi_polygons(MultiPoint(seeds), extend_to=FRAME.buffer(5))
@@ -194,17 +213,50 @@ def main():
         best = min(range(n_s), key=lambda i: samples[i].distance(c) if cell.contains(samples[i]) else 1e9)
         cell_t.append((cell, best / (n_s - 1)))
     out_ids = []
+    # where highways leave the city: sector centres, so roads run down the middle of ring territories
+    crossings = sorted(edge.project(pt, normalized=True) for _, rt, ln in road_geoms if rt in "IUS"
+                       for pt in [g for g in getattr(ln.intersection(edge), "geoms", [ln.intersection(edge)]) if isinstance(g, Point)])
+    merged_c = []
+    for t in crossings:
+        if merged_c and t - merged_c[-1] < 0.03:
+            merged_c[-1] = (merged_c[-1] + t) / 2
+        else:
+            merged_c.append(t)
+
+    def centres_for(n):
+        c = list(merged_c)
+        while len(c) > n:  # merge the closest pair
+            i = min(range(len(c) - 1), key=lambda i: c[i + 1] - c[i])
+            c[i:i + 2] = [(c[i] + c[i + 1]) / 2]
+        while len(c) < n:  # fill the biggest gap (ends count as gaps to 0 and 1)
+            pts = [0.0] + c + [1.0]
+            gaps = [(pts[i + 1] - pts[i]) * (0.5 if i in (0, len(pts) - 2) else 1) for i in range(len(pts) - 1)]
+            i = max(range(len(gaps)), key=lambda i: gaps[i])
+            new = pts[i + 1] - 0.5 * (pts[i + 1] - pts[i]) if 0 < i < len(pts) - 2 else (pts[1] / 2 if i == 0 else (pts[-2] + 1) / 2)
+            c = sorted(c + [new])
+        return c
+
+    def even_nudged(n):
+        cs = []
+        for i in range(n):
+            e = (i + 0.5) / n
+            near = [t for t in merged_c if abs(t - e) < 0.35 / n]
+            cs.append(min(near, key=lambda t: abs(t - e)) if near else e)
+        return cs
+
     for k, band in enumerate(bands):
         n = C.RING_SECTORS[k]
+        cs = even_nudged(n) if k == 2 else centres_for(n)
+        bounds = [0.0] + [(cs[i] + cs[i + 1]) / 2 for i in range(n - 1)] + [1.0001]
         for j in range(n):
-            lo, hi = j / n, (j + 1) / n
-            sector = unary_union([c for c, t in cell_t if lo <= t < hi or (j == n - 1 and t >= 1.0)])
+            lo, hi = bounds[j], bounds[j + 1]
+            sector = unary_union([c for c, t in cell_t if lo <= t < hi])
             g = band.intersection(sector)
             parts = sorted(polys(g), key=lambda p: -p.area)
             if not parts:
                 continue
             tid = f"r{k + 1}_{j + 1}"
-            terr[tid] = dict(id=tid, group="OUT", inside=False, ring=k + 1, sector=j, tmid=(lo + hi) / 2,
+            terr[tid] = dict(id=tid, group="OUT", inside=False, ring=k + 1, sector=j, tmid=cs[j],
                              geom=parts[0], crumbs=parts[1:])
             out_ids.append(tid)
 
@@ -242,6 +294,12 @@ def main():
         big = max(ps, key=lambda p: p.area)
         dropped += [p for p in ps if p is not big]
         terr[tid]["geom"] = big
+
+    # ---------------------------------------------------------------- caricature: chunky shared-edge simplification
+    ids = list(terr)
+    simp = shapely.coverage_simplify([terr[t]["geom"] for t in ids], 0.22)
+    for t, g in zip(ids, simp):
+        terr[t]["geom"] = max(polys(g.buffer(0)), key=lambda p: p.area)
 
     # ---------------------------------------------------------------- adjacency
     ids = list(terr)
@@ -295,14 +353,6 @@ def main():
             if br:
                 walls[f"{a}|{b}"]["gateAt"] = wg.interpolate(0.5, normalized=True)
 
-    feats = json.loads((DATA / "roads.geojson").read_text())["features"]
-    road_geoms = []
-    for f in feats:
-        p = f["properties"]
-        if p["rttyp"] == "C":
-            continue
-        ln = LineString([km(lat, lon) for lon, lat in f["geometry"]["coordinates"]])
-        road_geoms.append((p["name"], p["rttyp"], ln))
     tree = shapely.STRtree([terr[t]["geom"] for t in ids])
 
     def which(pt):
@@ -465,6 +515,8 @@ def main():
         rivers=[line_d(river)], bridges=br_out, kwikTrips=kt_out,
         cityHalls={"LAX": C.LAX[0]["id"], "ONA": C.ONA[0]["id"]},
         mnLabel=[round(v, 1) for v in to_svg_xy(*km(43.935, -91.385))],
+        doodles=[dict(kind=k, x=round(xy[0], 1), y=round(xy[1], 1)) for k, xy in
+                 [(k, to_svg_xy(*km(*ll))) for k, ll in C.DOODLES]],
     )
     js = ("/* Generated by tools/build_map.py. Do not edit by hand. */\n(function (root) {\nconst MAP = "
           + json.dumps(mapdata, separators=(",", ":"), ensure_ascii=False)

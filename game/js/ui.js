@@ -49,8 +49,10 @@
     el('line', { x1: 0, y1: 0, x2: 0, y2: 8, stroke: 'rgba(61,139,47,.85)', 'stroke-width': 3.2 }, pat);
     const mk = el('marker', { id: 'arrowhead', viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 5, markerHeight: 5, orient: 'auto-start-reverse' }, defs);
     el('path', { d: 'M0,0 L10,5 L0,10 z', fill: '#3d8b2f' }, mk);
-    el('rect', { x: x0 - w, y: y0 - h, width: w * 3, height: h * 3, fill: 'var(--water)' }, svg);
-    for (const name of ['land', 'terr', 'zom', 'water', 'roads', 'walls', 'gates', 'arrows', 'kt', 'labels', 'units']) layers[name] = el('g', { class: 'layer-' + name }, svg);
+    const ART = window.LaxisArt;
+    if (ART) defs.insertAdjacentHTML('beforeend', ART.WAVES);
+    el('rect', { x: x0 - w, y: y0 - h, width: w * 3, height: h * 3, fill: ART ? 'url(#waves)' : 'var(--water)' }, svg);
+    for (const name of ['land', 'terr', 'zom', 'water', 'roads', 'walls', 'gates', 'doodles', 'arrows', 'kt', 'labels', 'units']) layers[name] = el('g', { class: 'layer-' + name }, svg);
     for (const p of MAP.backdrop || []) el('path', { d: p.path, fill: p.kind === 'mn' ? 'var(--mn)' : 'var(--outside)', stroke: '#9b927f', 'stroke-width': .4 }, layers.land);
     for (const t of MAP.territories) {
       const p = el('path', { d: t.path, class: 'terr' + (t.inside ? '' : ' outside'), 'data-id': t.id }, layers.terr);
@@ -58,7 +60,10 @@
       tEls[t.id] = p;
       zEls[t.id] = el('path', { d: t.path, fill: 'url(#zhatch)', 'pointer-events': 'none', style: 'display:none' }, layers.zom);
     }
-    for (const wp of MAP.water || []) el('path', { d: wp, class: 'water' }, layers.water);
+    if (window.LaxisArt) for (const d of MAP.doodles || []) {
+      const art = window.LaxisArt.DOODLES[d.kind];
+      if (art) { const g = el('g', { transform: `translate(${d.x},${d.y}) scale(1.3)` }, layers.doodles); g.innerHTML = art; }
+    }
     for (const rp of MAP.rivers || []) el('path', { d: rp, fill: 'none', stroke: 'var(--water)', 'stroke-width': 4, 'stroke-linecap': 'round' }, layers.water);
     for (const r of MAP.roads || []) el('path', { d: r.path, class: 'road ' + (r.cls || '') }, layers.roads);
     for (const w of MAP.walls) {
