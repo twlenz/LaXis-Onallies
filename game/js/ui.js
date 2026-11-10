@@ -50,8 +50,8 @@
     const mk = el('marker', { id: 'arrowhead', viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 5, markerHeight: 5, orient: 'auto-start-reverse' }, defs);
     el('path', { d: 'M0,0 L10,5 L0,10 z', fill: '#3d8b2f' }, mk);
     el('rect', { x: x0 - w, y: y0 - h, width: w * 3, height: h * 3, fill: 'var(--water)' }, svg);
-    for (const name of ['land', 'terr', 'zom', 'water', 'roads', 'walls', 'arrows', 'kt', 'labels', 'units']) layers[name] = el('g', { class: 'layer-' + name }, svg);
-    for (const p of MAP.backdrop || []) el('path', { d: p.path, fill: 'var(--outside)', opacity: .55, stroke: '#9b927f', 'stroke-width': .4 }, layers.land);
+    for (const name of ['land', 'terr', 'zom', 'water', 'roads', 'walls', 'gates', 'arrows', 'kt', 'labels', 'units']) layers[name] = el('g', { class: 'layer-' + name }, svg);
+    for (const p of MAP.backdrop || []) el('path', { d: p.path, fill: p.kind === 'mn' ? 'var(--mn)' : 'var(--outside)', stroke: '#9b927f', 'stroke-width': .4 }, layers.land);
     for (const t of MAP.territories) {
       const p = el('path', { d: t.path, class: 'terr' + (t.inside ? '' : ' outside'), 'data-id': t.id }, layers.terr);
       const title = el('title', {}, p); title.textContent = t.name;
@@ -59,8 +59,17 @@
       zEls[t.id] = el('path', { d: t.path, fill: 'url(#zhatch)', 'pointer-events': 'none', style: 'display:none' }, layers.zom);
     }
     for (const wp of MAP.water || []) el('path', { d: wp, class: 'water' }, layers.water);
+    for (const rp of MAP.rivers || []) el('path', { d: rp, fill: 'none', stroke: 'var(--water)', 'stroke-width': 4, 'stroke-linecap': 'round' }, layers.water);
     for (const r of MAP.roads || []) el('path', { d: r.path, class: 'road ' + (r.cls || '') }, layers.roads);
-    for (const w of MAP.walls) wallEls[w.id] = el('path', { d: w.path, class: 'wall' }, layers.walls);
+    for (const w of MAP.walls) {
+      wallEls[w.id] = el('path', { d: w.path, class: 'wall' }, layers.walls);
+      if (w.gate && w.gateAt) {
+        const g = el('g', { transform: `translate(${w.gateAt[0]},${w.gateAt[1]})` }, layers.gates);
+        el('rect', { x: -7, y: -5, width: 14, height: 10, rx: 2, fill: '#ffd54a', stroke: '#2a1d10', 'stroke-width': 1 }, g);
+        el('path', { d: 'M-4,4 v-5 a4,4 0 0 1 8,0 v5', fill: '#2a1d10' }, g);
+        const tt = el('title', {}, g); tt.textContent = 'Highway gate: ' + (w.gateRoads || []).join(', ');
+      }
+    }
     const byId = Object.fromEntries(MAP.territories.map(t => [t.id, t]));
     for (const t of MAP.territories) {
       for (const n of t.zombieNext || []) {
@@ -294,7 +303,7 @@
       case 'combatMove':
       case 'noncombatMove':
         h += `<h2>${game.phaseName()}</h2><p class="help">${s.phase === 'combatMove'
-          ? 'Click one of your territories, choose units, then click a highlighted destination. Moving into zombies or enemy units starts a battle. Moving into an empty territory captures it. Units that stay put can fire from the wall.'
+          ? 'Click one of your territories, choose units, then click a highlighted destination. Moving into zombies or enemy units starts a battle. Moving into an empty territory captures it. Land units can only leave or enter the city through a highway gate (yellow) or a breach. Units that stay put can fire from the wall.'
           : 'Units that did not move or fight may move into friendly territory. Aircraft that flew must end on a landing site (Airport; Gundersen for the helicopter), or they crash.'}</p>`;
         h += moveCard();
         break;
@@ -430,7 +439,7 @@
     if (t.desc) h += `<div class="help">${escapeHtml(t.desc)}</div>`;
     for (const k in byOwner) h += `<div><b>${SIDE[k].name}</b>: ${countsText(byOwner[k])}</div>`;
     const walls = MAP.walls.filter(w => w.inside === tid || w.outside === tid);
-    if (walls.length) h += `<div class="help">Walls: ${walls.map(w => `${escapeHtml(tname(w.inside === tid ? w.outside : w.inside))} ${game.s.walls[w.id] ? '(intact)' : '(<b style="color:var(--lax)">breached</b>)'}`).join(', ')}</div>`;
+    if (walls.length) h += `<div class="help">Walls: ${walls.map(w => `W${w.no} ${escapeHtml(tname(w.inside === tid ? w.outside : w.inside))} ${game.s.walls[w.id] ? (w.gate ? '(intact, <b>gate</b>)' : '(intact)') : '(<b style="color:var(--lax)">breached</b>)'}`).join(', ')}</div>`;
     return h + '</div>';
   }
 

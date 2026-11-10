@@ -108,7 +108,7 @@ function counters() {
   add(40, ctrl('ONA', 'ONA'), 'round');
   add(2, `<div class="cm" style="border-color:#d98e04;color:#8a5a00">ROUND</div>`, 'round');
   add(2, `<div class="cm" style="border-color:#d98e04;color:#8a5a00;font-size:6pt">HOLDING<br>CITIES</div>`, 'round');
-  const walls = MAP.walls.map((w, i) => `<div class="wall"><b>W${i + 1}</b><span>${short(w.inside)} | ${short(w.outside)}</span></div>`);
+  const walls = MAP.walls.map((w) => `<div class="wall${w.gate ? ' gate' : ''}"><b>W${w.no}</b><span>${short(w.inside)} | ${short(w.outside)}${w.gate ? ' · GATE' : ''}</span></div>`);
   for (let i = 0; i < 4; i++) walls.push('<div class="wall"><b>W</b><span>spare</span></div>');
   return `<!doctype html><html><head><style>${BASE_CSS}
     .grid { display: grid; grid-template-columns: repeat(10, 0.75in); grid-auto-rows: 0.75in; gap: 0; }
@@ -118,7 +118,7 @@ function counters() {
     .u.x5 b { font-size: 18pt; } .cm { width: .62in; height: .62in; border-radius: 50%; border: 4pt solid; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10pt; text-align: center; }
     .walls { display: grid; grid-template-columns: repeat(5, 1.5in); grid-auto-rows: .5in; margin-top: 8pt; }
     .wall { border: .4pt dashed #999; background: repeating-linear-gradient(0deg, #7a5a3a 0 6px, #3a2a1a 6px 7px); color: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    .wall b { font-size: 12pt; } .wall span { font-size: 5.5pt; background: rgba(0,0,0,.45); padding: 0 3pt; }
+    .wall.gate { outline: 3pt solid #ffd54a; outline-offset: -3pt; } .wall b { font-size: 12pt; } .wall span { font-size: 5.5pt; background: rgba(0,0,0,.45); padding: 0 3pt; }
     .note { font-size: 8pt; margin: 0 0 6pt; }
   </style></head><body>
     <h1>Counters</h1><p class="note">Print on card stock (or glue to chipboard) and cut on the dashed lines. You can swap in real miniatures; stack chips (×3, ×5) go under one figure to mark a bigger stack.</p>
@@ -159,14 +159,16 @@ function playerAid() {
       <li><b>Collect</b> SP + 1 oil per Kwik Trip in territories you control.</li>
     </ol></div><div>
     <h2>Zombie turn</h2><ol>
-      <li><b>Shamble</b> 1 territory along the road arrow. If the arrow crosses an intact wall, <b>tear it down</b> instead.</li>
+      <li><b>March</b> 1 territory inward along the arrow. If the arrow crosses an intact wall, <b>tear it down</b> instead.</li>
       <li><b>Spawn</b>: roll ⌈round ÷ 2⌉ dice. Each <b>6</b> → 1 zombie at spawn point (roll 1–6).</li>
       <li><b>Feast</b>: zombies attack every territory they share with you, fighting to the end.</li>
     </ol></div></div>
     <h2>Units (hit on a roll ≤ value)</h2>
     <table><tr><th>Unit</th><th>Side</th><th>Cost</th><th>Att</th><th>Def</th><th>Move</th><th>Notes</th></tr>${rows}</table>
     <h2>The wall</h2>
-    <p>Zombies arrive next to a wall → next zombie turn they tear it down → the turn after they walk in. <b>Walls are never rebuilt.</b> Your units pass through freely.</p>
+    <p>Zombies arrive next to a wall → next zombie turn they tear it down → the turn after they walk in. <b>Walls are never rebuilt.</b>
+    Your land units cross the wall <b>only at highway gates</b> (${MAP.walls.filter(w => w.gate).map(w => 'W' + w.no).join(', ')}) or through breaches; aircraft fly over.</p>
+    <p><b>Rings:</b> automatic zombies march one territory per turn along the arrows: ring 3 → ring 2 → ring 1 → wall → toward downtown.</p>
     <p><b>Wall fire:</b> land units in an inside territory that <b>did not move this turn</b> fire one volley across an intact wall at zombies in the adjacent outside territory, using their <b>Defense</b> value. Zombies cannot hit back. One target per territory per turn.</p>
     <h2>Who rises</h2>
     <p>Land units you lose <b>when zombies beat you</b>, or <b>when you attack zombies and lose or retreat</b>, become zombies in that territory. Losses in battles you win stay dead. Aircraft never rise. Player-vs-player losses never rise.</p>

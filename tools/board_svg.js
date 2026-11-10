@@ -2,7 +2,7 @@
 'use strict';
 
 const COLORS = {
-  water: '#b9d5ea', backdrop: '#ece7da', LAX: '#f3cdc5', ONA: '#c8d8f1', FI: '#dedbd4', OUT: '#efe7d2',
+  water: '#b9d5ea', backdrop: '#e4e0d4', LAX: '#f3cdc5', ONA: '#c8d8f1', FI: '#dedbd4', OUT: '#f1ead6', OUT2: '#e8dfc4', OUT3: '#ddd3b4',
   spawn: '#d6e7c9', border: '#6d6150', laxEdge: '#a3322a', onaEdge: '#2c62b4', wall: '#4a3b2a', zom: '#3d8b2f',
   ink: '#231f1a', kt: '#e8742a',
 };
@@ -51,9 +51,10 @@ function boardSVG(map, opts = {}) {
     <marker id="zarr" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="${COLORS.zom}"/></marker>
   </defs>`);
   o.push(`<rect x="${x0}" y="${y0}" width="${W}" height="${H}" fill="${COLORS.water}"/>`);
-  for (const b of map.backdrop || []) o.push(`<path d="${b.path}" fill="${COLORS.backdrop}" stroke="#a89f8b" stroke-width=".5"/>`);
+  for (const b of map.backdrop || []) o.push(`<path d="${b.path}" fill="${b.kind === 'mn' ? '#d9d6cc' : COLORS.backdrop}" stroke="#a89f8b" stroke-width=".5"/>`);
+  if (opts.cartouche !== false && map.mnLabel) o.push(`<text x="${map.mnLabel[0]}" y="${map.mnLabel[1]}" font-size="16" font-weight="800" fill="#9c978a" letter-spacing="4" text-anchor="middle" transform="rotate(-80 ${map.mnLabel[0]} ${map.mnLabel[1]})">MINNESOTA</text>`);
   for (const t of map.territories) {
-    const fill = t.spawn ? 'url(#spawnhatch)' : COLORS[t.group];
+    const fill = t.spawn ? 'url(#spawnhatch)' : t.group === 'OUT' ? COLORS[['OUT', 'OUT', 'OUT2', 'OUT3'][t.ring || 1]] : COLORS[t.group];
     o.push(`<path d="${t.path}" fill="${fill}" stroke="${COLORS.border}" stroke-width="1" stroke-linejoin="round"/>`);
   }
   // city outlines
@@ -63,6 +64,7 @@ function boardSVG(map, opts = {}) {
     }
   }
   for (const w of map.water || []) o.push(`<path d="${w}" fill="${COLORS.water}"/>`);
+  for (const r of map.rivers || []) o.push(`<path d="${r}" fill="none" stroke="${COLORS.water}" stroke-width="5" stroke-linecap="round"/>`);
   for (const r of map.roads || []) {
     const wdt = r.cls === 'motorway' ? 3.2 : 2.2;
     o.push(`<path d="${r.path}" fill="none" stroke="#7a6a50" stroke-width="${wdt + 1.2}" stroke-opacity=".35" stroke-linecap="round"/>`);
@@ -84,9 +86,14 @@ function boardSVG(map, opts = {}) {
     o.push(`<path d="${w.path}" fill="none" stroke="url(#brick)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`);
   }
   for (const w of map.walls) {
+    if (w.gate && w.gateAt) {
+      const [gx, gy] = w.gateAt;
+      o.push(`<g transform="translate(${gx},${gy})"><rect x="-9" y="-6" width="18" height="12" rx="2" fill="#ffd54a" stroke="#2a1d10" stroke-width="1.2"/><path d="M-5,5 v-6 a5,5 0 0 1 10,0 v6" fill="#2a1d10"/></g>`);
+    }
     const m = pathMid(w.path);
     if (!m) continue;
-    o.push(`<g transform="translate(${m[0].toFixed(1)},${m[1].toFixed(1)})"><circle r="5.2" fill="#fff" stroke="#2a1d10" stroke-width="1"/><text y="2.4" font-size="6.5" font-weight="700" text-anchor="middle" fill="#2a1d10">W${wallNo[w.id]}</text></g>`);
+    const off = w.gate && w.gateAt && Math.hypot(m[0] - w.gateAt[0], m[1] - w.gateAt[1]) < 14 ? 14 : 0;
+    o.push(`<g transform="translate(${(m[0] + off).toFixed(1)},${(m[1] + off).toFixed(1)})"><circle r="6" fill="#fff" stroke="#2a1d10" stroke-width="1"/><text y="2.4" font-size="6.5" font-weight="700" text-anchor="middle" fill="#2a1d10">W${w.no}</text></g>`);
   }
   // kwik trips
   for (const k of map.kwikTrips || []) o.push(`<g transform="translate(${k.x},${k.y}) scale(.9)">${ICONS.pump}</g>`);
@@ -116,8 +123,8 @@ function boardSVG(map, opts = {}) {
   return o.join('\n');
 }
 
-function cartouche(map, x0, y0) {
-  const x = x0 + 14, y = y0 + 14;
+function cartouche(map, x0, y0, W, H) {
+  const x = x0 + 10, y = y0 + H - 228;
   return `<g transform="translate(${x},${y})">
   <rect width="250" height="214" rx="8" fill="#fffdf6" stroke="#4a3b2a" stroke-width="1.5"/>
   <text x="125" y="30" font-size="25" font-weight="800" text-anchor="middle"><tspan fill="${COLORS.laxEdge}">LaXis</tspan><tspan fill="#333"> &amp; </tspan><tspan fill="${COLORS.onaEdge}">OnAllies</tspan></text>
@@ -128,8 +135,9 @@ function cartouche(map, x0, y0) {
     <rect x="12" y="88" width="14" height="10" fill="${COLORS.FI}" stroke="#777"/><text x="32" y="96">French Island (neutral, inside wall)</text>
     <rect x="12" y="103" width="14" height="10" fill="${COLORS.OUT}" stroke="#777"/><text x="32" y="111">Outside the wall: income, exposed</text>
     <rect x="12" y="118" width="14" height="10" fill="url(#spawnhatch)" stroke="#777"/><text x="32" y="126">Zombie spawn point (roll 1–6)</text>
-    <path d="M12,139 h14" stroke="#2a1d10" stroke-width="7"/><path d="M12,139 h14" stroke="url(#brick)" stroke-width="5"/><text x="32" y="142">Wall segment (W#: place a wall piece)</text>
-    <path d="M12,154 h12" stroke="${COLORS.zom}" stroke-width="2.2" stroke-dasharray="5 2.5" marker-end="url(#zarr)"/><text x="32" y="157">Zombie road arrow</text>
+    <path d="M12,139 h14" stroke="#2a1d10" stroke-width="7"/><path d="M12,139 h14" stroke="url(#brick)" stroke-width="5"/><text x="32" y="142">Wall (W#)</text>
+    <path d="M12,154 h12" stroke="${COLORS.zom}" stroke-width="2.2" stroke-dasharray="5 2.5" marker-end="url(#zarr)"/><text x="32" y="157">Zombies march this way</text>
+    <g transform="translate(150,139) scale(.8)"><rect x="-9" y="-6" width="18" height="12" rx="2" fill="#ffd54a" stroke="#2a1d10" stroke-width="1.2"/><path d="M-5,5 v-6 a5,5 0 0 1 10,0 v6" fill="#2a1d10"/></g><text x="162" y="142">Highway gate</text>
     <g transform="translate(19,170)">${ICONS.pump}</g><text x="32" y="173">Kwik Trip: +1 oil per turn</text>
     <g transform="translate(19,186)">${ICONS.star}</g><text x="32" y="189">City Hall: new units placed here</text>
     <g transform="translate(140,170)">${ICONS.plane}</g><text x="152" y="173">Airport</text>

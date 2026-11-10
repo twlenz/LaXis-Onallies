@@ -69,7 +69,9 @@
       this.adj = {};
       for (const t of map.territories) this.adj[t.id] = new Set(t.adj);
       this.wallIndex = {};
+      this.gates = {};
       for (const w of map.walls) {
+        if (w.gate) this.gates[w.id] = true;
         this.wallIndex[w.inside + '|' + w.outside] = w.id;
         this.wallIndex[w.outside + '|' + w.inside] = w.id;
       }
@@ -174,6 +176,15 @@
     wallIntact(a, b) {
       const w = this.wallBetween(a, b);
       return !!(w && this.s.walls[w]);
+    }
+    isGate(a, b) {
+      const w = this.wallBetween(a, b);
+      return !!(w && this.gates[w]);
+    }
+    /** Land units cross the wall only at a highway gate or through a breach. */
+    landCanCross(a, b) {
+      const w = this.wallBetween(a, b);
+      return !w || !this.s.walls[w] || !!this.gates[w];
     }
     special(tag) { return this.map.territories.filter(t => (t.special || []).includes(tag)).map(t => t.id); }
     cityHall(p) { return this.map.cityHalls[p]; }
@@ -323,6 +334,7 @@
           if (cur !== from && !passOk(cur)) continue;
           for (const n of this.adj[cur]) {
             if (n in prev) continue;
+            if (!g.flying && !this.landCanCross(cur, n)) continue;
             prev[n] = cur;
             if (n === to) {
               if (!destOk(n)) { delete prev[n]; continue; }
