@@ -25,13 +25,7 @@ const POSTER_W = 24; // inches
 const POSTER_H = +(POSTER_W * VH / VW).toFixed(2);
 
 // ------------------------------------------------------------------ icons
-const UNIT_ICON = {
-  inf: '<circle cx="0" cy="-5.5" r="3.2"/><path d="M-3.8,-6.4 q3.8,-4.6 7.6,0 z"/><path d="M-4.5,-1.5 h9 l1.3,8 h-3 l-.8,-4 -.8,8 h-2.4 l-.3,-5 -.3,5 h-2.4 l-.8,-8 -.8,4 h-3 z"/>',
-  tank: '<rect x="-8" y="1" width="16" height="5" rx="2.5"/><rect x="-6" y="-3" width="11" height="4.5" rx="1"/><rect x="2" y="-2.4" width="8" height="1.6"/><circle cx="-5" cy="3.5" r="1" fill="#fff"/><circle cx="0" cy="3.5" r="1" fill="#fff"/><circle cx="5" cy="3.5" r="1" fill="#fff"/>',
-  heli: '<rect x="-9" y="-8" width="18" height="1.3"/><rect x="-.6" y="-7" width="1.2" height="3"/><ellipse cx="-1" cy="-.5" rx="5.5" ry="3.8"/><rect x="3" y="-1.6" width="7" height="1.8"/><rect x="9" y="-3.5" width="1.3" height="4"/><path d="M-4,4 v2 h7 v-2" fill="none" stroke="currentColor" stroke-width="1"/>',
-  plane: '<path d="M0,-9 L1.4,-3 L9,1 L9,3 L1.4,1 L1,6 L3.5,8 L3.5,9 L0,8 L-3.5,9 L-3.5,8 L-1,6 L-1.4,1 L-9,3 L-9,1 L-1.4,-3Z"/>',
-  zombie: '<circle cx="-1" cy="-6" r="3"/><path d="M-4,-2.5 h5 l7,1.4 v1.8 l-6,-.6 v3.4 l1.5,8 h-2.6 l-1.8,-6 -1.2,6 h-2.6 l1,-8 v-3 l-1.6,2 -1.8,-1 z"/><path d="M-3,-2 L5,-3.6" stroke="currentColor" stroke-width="1.2"/>',
-};
+const { UNIT_ICON } = require(path.join(ROOT, 'game/js/art.js'));
 function icon(type, color, size) {
   return `<svg viewBox="-11 -11 22 22" width="${size}" height="${size}" style="color:${color}"><g fill="${color}">${UNIT_ICON[type]}</g></svg>`;
 }
@@ -116,9 +110,11 @@ function counters() {
     .u { width: .68in; height: .68in; border-radius: 5pt; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; }
     .u span { font-size: 5pt; font-weight: 700; letter-spacing: .2pt; margin-top: 1pt; white-space: nowrap; }
     .u.x5 b { font-size: 18pt; } .cm { width: .62in; height: .62in; border-radius: 50%; border: 4pt solid; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10pt; text-align: center; }
-    .walls { display: grid; grid-template-columns: repeat(5, 1.5in); grid-auto-rows: .5in; margin-top: 8pt; }
-    .wall { border: .4pt dashed #999; background: repeating-linear-gradient(0deg, #7a5a3a 0 6px, #3a2a1a 6px 7px); color: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    .wall.gate { outline: 3pt solid #ffd54a; outline-offset: -3pt; } .wall b { font-size: 12pt; } .wall span { font-size: 5.5pt; background: rgba(0,0,0,.45); padding: 0 3pt; }
+    .walls { display: grid; grid-template-columns: repeat(5, 1.5in); grid-auto-rows: .5in; gap: 0; margin-top: 8pt; }
+    .wall { border: .4pt dashed #999; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fff; }
+    .wall b { display: block; width: 1.3in; height: .26in; border-radius: 3pt; border: .8pt solid #3a2412; background: linear-gradient(#a8743d, #8b5a2b 60%, #6e4320); color: #fff; text-align: center; line-height: .26in; box-shadow: 1pt 1.5pt 0 rgba(0,0,0,.3); }
+    .wall.gate b { background: linear-gradient(#ecc169, #d9a441 60%, #b9852a); color: #3a2412; }
+    .wall b { font-size: 11pt; } .wall span { font-size: 5.5pt; color: #3a2412; margin-top: 2pt; }
     .note { font-size: 8pt; margin: 0 0 6pt; }
   </style></head><body>
     <h1>Counters</h1><p class="note">Print on card stock (or glue to chipboard) and cut on the dashed lines. You can swap in real miniatures; stack chips (×3, ×5) go under one figure to mark a bigger stack.</p>

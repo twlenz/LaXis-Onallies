@@ -48,8 +48,8 @@ Stacks of identical units can be marked with "×5" chips, as in Axis & Allies.
   - its **income value** (Supply Points, SP),
   - **oil** equal to the number of **Kwik Trip** gas stations in it (each one gives **1 oil** per turn),
   - a **zombie arrow** showing where automatic zombies move next.
-- **The wall** runs along every border between an inside territory and an outside territory, in numbered segments (**W1, W2, …**). **There is no wall between La Crosse and Onalaska.** The Mississippi needs no wall, because zombies cannot cross open water.
-- **Highway gates** (yellow) are the wall segments where a major highway leaves the city:
+- **The wall** runs along every border between an inside territory and an outside territory. Each numbered segment is a narrow slot holding one wooden wall piece (**W1, W2, …**). **There is no wall between La Crosse and Onalaska.** The Mississippi needs no wall, because zombies cannot cross open water.
+- **Highway gates** (gold wall pieces) are the wall segments where a major highway leaves the city:
   - **North:** WI-35 and US-53.
   - **East:** I-90, WI-16, and State Road / WI-33.
   - **South:** Mormon Coulee Road (US-14/61 and WI-35), just before Southern Bluffs.
