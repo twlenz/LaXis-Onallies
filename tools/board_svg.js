@@ -2,7 +2,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { DOODLES, WAVES } = require('../game/js/art.js');
+const { DOODLES, WAVES, badgeRow, pathInfo, wallBar } = require('../game/js/art.js');
 
 const COLORS = {
   water: '#9fd3ee', mn: '#d8d3c4', LAX: '#f6a99f', ONA: '#9ec3f2', FI: '#d7d7d2', OUT: '#f4e8bd', OUT2: '#ead99c', OUT3: '#cfe6a8',
@@ -69,59 +69,59 @@ function boardSVG(map, opts = {}) {
   if (map.mnLabel) o.push(`<text x="${map.mnLabel[0]}" y="${map.mnLabel[1]}" font-size="20" fill="#9c978a" letter-spacing="5" text-anchor="middle" font-family="Bangers, ${HAND}" transform="rotate(-80 ${map.mnLabel[0]} ${map.mnLabel[1]})">MINNESOTA</text>`);
   // land with a cartoon drop shadow
   o.push('<g filter="url(#shadow)">');
-  for (const t of map.territories) o.push(`<path d="${t.path}" fill="${terrFill(t)}" stroke="${COLORS.border}" stroke-width="1.6" stroke-linejoin="round"/>`);
+  for (const t of map.territories) o.push(`<path d="${t.path}" fill="${terrFill(t)}"/>`);
   o.push('</g>');
+  for (const r of map.rivers || []) o.push(`<path d="${r}" fill="none" stroke="${COLORS.water}" stroke-width="6" stroke-linecap="round"/>`);
+  // roads: faint, under the borders
+  for (const r of map.roads || []) {
+    const wdt = r.cls === 'motorway' ? 2.2 : r.cls === 'secondary' ? 1 : 1.5;
+    o.push(`<path d="${r.path}" fill="none" stroke="#8a6a3a" stroke-opacity=".35" stroke-width="${wdt}" stroke-linecap="round" stroke-linejoin="round"/>`);
+  }
+  for (const b of map.bridges || []) o.push(`<path d="${b.path}" fill="none" stroke="#3b2f22" stroke-width="5" stroke-linecap="round" stroke-opacity=".6"/><path d="${b.path}" fill="none" stroke="#e9dcc0" stroke-width="3" stroke-linecap="round"/>`);
+  for (const t of map.territories) o.push(`<path d="${t.path}" fill="none" stroke="${COLORS.border}" stroke-width="1.6" stroke-linejoin="round"/>`);
   for (const g of ['LAX', 'ONA']) {
     for (const t of map.territories.filter(x => x.group === g)) {
       o.push(`<path d="${t.path}" fill="none" stroke="${g === 'LAX' ? COLORS.laxEdge : COLORS.onaEdge}" stroke-width="1" stroke-opacity=".5" stroke-linejoin="round"/>`);
     }
   }
-  for (const r of map.rivers || []) o.push(`<path d="${r}" fill="none" stroke="${COLORS.water}" stroke-width="6" stroke-linecap="round"/>`);
-  for (const r of map.roads || []) {
-    const wdt = r.cls === 'motorway' ? 3.4 : r.cls === 'secondary' ? 1.6 : 2.4;
-    o.push(`<path d="${r.path}" fill="none" stroke="#3b2f22" stroke-width="${wdt + 1.4}" stroke-opacity=".5" stroke-linecap="round" stroke-linejoin="round"/>`);
-    o.push(`<path d="${r.path}" fill="none" stroke="${r.cls === 'motorway' ? '#f0a04b' : '#fbe08a'}" stroke-width="${wdt}" stroke-linecap="round" stroke-linejoin="round"/>`);
-  }
-  for (const b of map.bridges || []) o.push(`<path d="${b.path}" fill="none" stroke="#3b2f22" stroke-width="6.5" stroke-linecap="round"/><path d="${b.path}" fill="none" stroke="#e9dcc0" stroke-width="4" stroke-linecap="round"/>`);
   // zombie arrows
   for (const t of map.territories) {
     for (const n of t.zombieNext || []) {
       const a = t.label, b = T[n].label;
       const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
       const s = Math.min(22, L * 0.3) / L, e = 1 - Math.min(26, L * 0.35) / L;
-      o.push(`<path d="M${(a[0] + dx * s).toFixed(1)},${(a[1] + dy * s).toFixed(1)} L${(a[0] + dx * e).toFixed(1)},${(a[1] + dy * e).toFixed(1)}" stroke="${COLORS.zom}" stroke-width="2.4" stroke-dasharray="5 3" marker-end="url(#zarr)" fill="none" opacity=".8"/>`);
+      o.push(`<path d="M${(a[0] + dx * s).toFixed(1)},${(a[1] + dy * s).toFixed(1)} L${(a[0] + dx * e).toFixed(1)},${(a[1] + dy * e).toFixed(1)}" stroke="${COLORS.zom}" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#zarr)" fill="none" opacity=".25"/>`);
     }
   }
-  // walls and gates
+  // walls: a narrow slot along the border with a Catan-road-style wooden piece (gates are golden)
   for (const w of map.walls) {
-    o.push(`<path d="${w.path}" fill="none" stroke="#2a1d10" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`);
-    o.push(`<path d="${w.path}" fill="none" stroke="url(#brick)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>`);
+    o.push(`<path d="${w.path}" fill="none" stroke="#3a2412" stroke-width="9" stroke-opacity=".75" stroke-linecap="round" stroke-linejoin="round"/>`);
+    o.push(`<path d="${w.path}" fill="none" stroke="#e9dcc0" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`);
   }
   for (const w of map.walls) {
-    if (w.gate && w.gateAt) o.push(`<g transform="translate(${w.gateAt[0]},${w.gateAt[1]})">${ICONS.gate}</g>`);
+    const info = pathInfo(w.path);
+    if (!info) continue;
+    const [px, py] = w.gate && w.gateAt ? w.gateAt : [info.x, info.y];
+    o.push(`<g transform="translate(${px.toFixed(1)},${py.toFixed(1)}) rotate(${info.angle.toFixed(1)}) scale(1.25)">${wallBar(info.length * 0.8 / 1.25, w.gate)}</g>`);
     const m = pathMid(w.path);
-    if (!m) continue;
-    const off = w.gate && w.gateAt && Math.hypot(m[0] - w.gateAt[0], m[1] - w.gateAt[1]) < 14 ? 14 : 0;
-    o.push(`<g transform="translate(${(m[0] + off).toFixed(1)},${(m[1] + off).toFixed(1)})"><circle r="6.5" fill="#fff" stroke="#2a1d10" stroke-width="1.2"/><text y="2.8" font-size="8" text-anchor="middle" fill="#2a1d10">W${w.no}</text></g>`);
+    const off = Math.hypot(m[0] - px, m[1] - py) < 16 ? 1 : 0;
+    const nx = -Math.sin(info.angle * Math.PI / 180) * 12 * off, ny = Math.cos(info.angle * Math.PI / 180) * 12 * off;
+    o.push(`<g transform="translate(${(m[0] + nx).toFixed(1)},${(m[1] + ny).toFixed(1)})"><circle r="5.5" fill="#fff" stroke="#2a1d10" stroke-width="1"/><text y="2.5" font-size="7" text-anchor="middle" fill="#2a1d10">W${w.no}</text></g>`);
   }
   for (const d of map.doodles || []) if (DOODLES[d.kind]) o.push(`<g transform="translate(${d.x},${d.y}) scale(1.3)">${DOODLES[d.kind]}</g>`);
-  for (const k of map.kwikTrips || []) o.push(`<g transform="translate(${k.x},${k.y})">${ICONS.pump}</g>`);
   // labels
   for (const t of map.territories) {
     const [x, y] = t.label;
     const fs1 = t.area > 9000 ? 13 : t.area > 3000 ? 10.5 : 8.8;
     o.push(`<text x="${x}" y="${y - 4}" font-size="${fs1}" text-anchor="middle" fill="${COLORS.ink}" stroke="#fffaf0" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${esc(t.short || t.name)}</text>`);
-    const bits = [];
-    if (t.value) bits.push(`${t.value} SP`);
-    if (t.kwikTrips) bits.push(`${t.kwikTrips} oil`);
-    if (bits.length) o.push(`<text x="${x}" y="${y + 6}" font-size="${fs1 * 0.8}" text-anchor="middle" fill="${COLORS.ink}" stroke="#fffaf0" stroke-width="2.4" paint-order="stroke">${bits.join(' · ')}</text>`);
-    let ix = x - 14;
+    if (t.value || t.kwikTrips) o.push(`<g transform="translate(${x},${y + 8})">${badgeRow(t.value, t.kwikTrips, 7.5).svg}</g>`);
+    let ix = x - 10;
     for (const sp of t.special || []) {
       const icon = { cityhall: ICONS.star, airport: ICONS.plane, gundersen: ICONS.cross }[sp];
-      if (icon) { o.push(`<g transform="translate(${ix},${y + 17}) scale(1.4)">${icon}</g>`); ix += 16; }
+      if (icon) { o.push(`<g transform="translate(${ix},${y + 25}) scale(1.4)">${icon}</g>`); ix += 18; }
     }
     if (t.spawn) {
-      o.push(`<g transform="translate(${x},${y + 22})"><rect x="-10" y="-10" width="20" height="20" rx="4" fill="#fff" stroke="${COLORS.zom}" stroke-width="2"/><text y="6" font-size="16" text-anchor="middle" fill="${COLORS.zom}" font-family="Bangers, ${HAND}">${t.spawn}</text></g>`);
+      o.push(`<g transform="translate(${x},${y + 28})"><rect x="-10" y="-10" width="20" height="20" rx="4" fill="#fff" stroke="${COLORS.zom}" stroke-width="2"/><text y="6" font-size="16" text-anchor="middle" fill="${COLORS.zom}" font-family="Bangers, ${HAND}">${t.spawn}</text></g>`);
     }
   }
   if (opts.cartouche !== false) o.push(cartouche(x0, y0, W, H));
@@ -141,14 +141,14 @@ function cartouche(x0, y0, W, H) {
     <rect x="120" y="62" width="14" height="10" fill="${COLORS.ONA}" stroke="${COLORS.border}"/><text x="140" y="71">Onalaska</text>
     <rect x="12" y="78" width="14" height="10" fill="${COLORS.FI}" stroke="${COLORS.border}"/><text x="32" y="87">French Island (neutral)</text>
     <rect x="12" y="94" width="14" height="10" fill="${COLORS.OUT}" stroke="${COLORS.border}"/><rect x="28" y="94" width="14" height="10" fill="${COLORS.OUT2}" stroke="${COLORS.border}"/><rect x="44" y="94" width="14" height="10" fill="url(#spawnhatch)" stroke="${COLORS.border}"/><text x="64" y="103">Rings 1 · 2 · 3 (3 = spawn 1–6)</text>
-    <path d="M12,117 h16" stroke="#2a1d10" stroke-width="8"/><path d="M12,117 h16" stroke="url(#brick)" stroke-width="5.5"/><text x="34" y="120">Wall (W#)</text>
-    <g transform="translate(140,116) scale(.8)">${ICONS.gate}</g><text x="152" y="120">Highway gate</text>
-    <path d="M12,134 h14" stroke="${COLORS.zom}" stroke-width="2.4" stroke-dasharray="5 3" marker-end="url(#zarr)"/><text x="34" y="137">Zombies march this way</text>
-    <g transform="translate(19,152)">${ICONS.pump}</g><text x="34" y="155">Kwik Trip: +1 oil per turn</text>
+    <g transform="translate(20,116)">${wallBar(16, false)}</g><text x="34" y="120">Wall piece (W#)</text>
+    <g transform="translate(142,116)">${wallBar(16, true)}</g><text x="156" y="120">Highway gate</text>
+    <path d="M12,134 h14" stroke="${COLORS.zom}" stroke-width="2.4" stroke-dasharray="4 3" marker-end="url(#zarr)" opacity=".5"/><text x="34" y="137">Zombies march this way</text>
+    <g transform="translate(19,152)">${require('../game/js/art.js').BARREL}</g><text x="34" y="155">Oil (one per Kwik Trip)</text>
     <g transform="translate(19,170)">${ICONS.star}</g><text x="34" y="173">City Hall (new units)</text>
     <g transform="translate(140,152)">${ICONS.plane}</g><text x="152" y="155">Airport</text>
     <g transform="translate(140,170)">${ICONS.cross}</g><text x="152" y="173">Gundersen helipad</text>
-    <text x="12" y="192" font-size="8.5" fill="#555">SP = supply points. Hit on a roll ≤ value.</text>
+    <g transform="translate(20,189)">${require('../game/js/art.js').valueBadge(3, 6)}</g><text x="34" y="192" font-size="8.5" fill="#555">Income (supply points). Hit on a roll ≤ value.</text>
     <text x="12" y="206" font-size="8.5" fill="#555">Land units cross the wall only at gates or breaches.</text>
   </g>
 </g>`;

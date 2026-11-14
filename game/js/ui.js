@@ -52,13 +52,14 @@
     const ART = window.LaxisArt;
     if (ART) defs.insertAdjacentHTML('beforeend', ART.WAVES);
     el('rect', { x: x0 - w, y: y0 - h, width: w * 3, height: h * 3, fill: ART ? 'url(#waves)' : 'var(--water)' }, svg);
-    for (const name of ['land', 'terr', 'zom', 'water', 'roads', 'walls', 'gates', 'doodles', 'arrows', 'kt', 'labels', 'units']) layers[name] = el('g', { class: 'layer-' + name }, svg);
+    for (const name of ['land', 'terr', 'zom', 'water', 'roads', 'borders', 'walls', 'gates', 'doodles', 'arrows', 'labels', 'units']) layers[name] = el('g', { class: 'layer-' + name }, svg);
     for (const p of MAP.backdrop || []) el('path', { d: p.path, fill: p.kind === 'mn' ? 'var(--mn)' : 'var(--outside)', stroke: '#9b927f', 'stroke-width': .4 }, layers.land);
     for (const t of MAP.territories) {
       const p = el('path', { d: t.path, class: 'terr' + (t.inside ? '' : ' outside'), 'data-id': t.id }, layers.terr);
       const title = el('title', {}, p); title.textContent = t.name;
       tEls[t.id] = p;
       zEls[t.id] = el('path', { d: t.path, fill: 'url(#zhatch)', 'pointer-events': 'none', style: 'display:none' }, layers.zom);
+      el('path', { d: t.path, class: 'border' }, layers.borders);
     }
     if (window.LaxisArt) for (const d of MAP.doodles || []) {
       const art = window.LaxisArt.DOODLES[d.kind];
@@ -67,13 +68,19 @@
     for (const rp of MAP.rivers || []) el('path', { d: rp, fill: 'none', stroke: 'var(--water)', 'stroke-width': 4, 'stroke-linecap': 'round' }, layers.water);
     for (const r of MAP.roads || []) el('path', { d: r.path, class: 'road ' + (r.cls || '') }, layers.roads);
     for (const w of MAP.walls) {
-      wallEls[w.id] = el('path', { d: w.path, class: 'wall' }, layers.walls);
-      if (w.gate && w.gateAt) {
-        const g = el('g', { transform: `translate(${w.gateAt[0]},${w.gateAt[1]})` }, layers.gates);
-        el('rect', { x: -7, y: -5, width: 14, height: 10, rx: 2, fill: '#ffd54a', stroke: '#2a1d10', 'stroke-width': 1 }, g);
-        el('path', { d: 'M-4,4 v-5 a4,4 0 0 1 8,0 v5', fill: '#2a1d10' }, g);
-        const tt = el('title', {}, g); tt.textContent = 'Highway gate: ' + (w.gateRoads || []).join(', ');
+      // a narrow slot along the border, with a Catan-road-style wooden bar sitting in it
+      el('path', { d: w.path, class: 'wallslot-edge' }, layers.walls);
+      const slot = el('path', { d: w.path, class: 'wallslot' }, layers.walls);
+      const info = window.LaxisArt ? window.LaxisArt.pathInfo(w.path) : null;
+      let piece = null;
+      if (info) {
+        const [px, py] = w.gate && w.gateAt ? w.gateAt : [info.x, info.y];
+        piece = el('g', { class: 'wallpiece', transform: `translate(${px},${py}) rotate(${info.angle})` }, layers.gates);
+        piece.innerHTML = window.LaxisArt.wallBar(info.length * 0.8, w.gate);
+        const tt = el('title', {}, piece);
+        tt.textContent = `Wall W${w.no}` + (w.gate ? ' (highway gate: ' + (w.gateRoads || []).join(', ') + ')' : '');
       }
+      wallEls[w.id] = { slot, piece };
     }
     const byId = Object.fromEntries(MAP.territories.map(t => [t.id, t]));
     for (const t of MAP.territories) {
@@ -84,18 +91,16 @@
         el('path', { d: `M${a[0] + dx * s},${a[1] + dy * s} L${a[0] + dx * e},${a[1] + dy * e}`, class: 'zarrow' }, layers.arrows);
       }
     }
-    for (const k of MAP.kwikTrips || []) {
-      const g = el('g', { class: 'kt', transform: `translate(${k.x},${k.y})` }, layers.kt);
-      el('rect', { x: -2.6, y: -2.6, width: 5.2, height: 5.2, rx: 1, fill: '#e8742a', stroke: '#fff', 'stroke-width': .7 }, g);
-    }
     for (const t of MAP.territories) {
       const [x, y] = t.label;
-      const name = el('text', { x, y: y - 6, class: 'tlabel' }, layers.labels);
+      const name = el('text', { x, y: y - 9, class: 'tlabel' }, layers.labels);
       name.textContent = t.short || t.name;
-      const v = el('text', { x, y: y + 3, class: 'tvalue', id: 'tv-' + t.id }, layers.labels);
-      v.textContent = valueText(t);
+      if (window.LaxisArt && (t.value || t.kwikTrips)) {
+        const row = el('g', { transform: `translate(${x},${y + 1})` }, layers.labels);
+        row.innerHTML = window.LaxisArt.badgeRow(t.value, t.kwikTrips, 6.5).svg;
+      }
       if (t.spawn) {
-        const g = el('g', { transform: `translate(${x},${y - 18})` }, layers.labels);
+        const g = el('g', { transform: `translate(${x},${y - 22})` }, layers.labels);
         el('circle', { r: 6.5, fill: '#3d8b2f', stroke: '#fff', 'stroke-width': 1 }, g);
         const st = el('text', { y: 3, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: '#fff' }, g);
         st.textContent = t.spawn;
@@ -103,7 +108,7 @@
       for (const sp of t.special || []) {
         const icon = { cityhall: '★', airport: '✈', gundersen: '✚' }[sp];
         if (!icon) continue;
-        const it = el('text', { x: x + (sp === 'gundersen' ? -16 : 16), y: y - 5, 'font-size': 10, 'text-anchor': 'middle', fill: '#2b2620', 'pointer-events': 'none' }, layers.labels);
+        const it = el('text', { x: x + (sp === 'gundersen' ? -22 : 22), y: y + 5, 'font-size': 11, 'text-anchor': 'middle', fill: '#2b2620', 'pointer-events': 'none' }, layers.labels);
         it.textContent = icon;
       }
     }
@@ -111,7 +116,7 @@
   }
   function valueText(t) {
     const parts = [];
-    if (t.value) parts.push(`${t.value} SP`);
+    if (t.value) parts.push(`worth ${t.value}`);
     if (t.kwikTrips) parts.push(`${t.kwikTrips} oil`);
     return parts.join(' · ');
   }
@@ -186,21 +191,32 @@
     endBtn.disabled = !!s.winner || isCpuTurn();
     // map
     const battleT = new Set((s.battles || []).filter(b => !b.done).map(b => b.tid));
+    // brighten: destinations while a territory is picked, otherwise every territory with units that can move
+    const movable = new Set();
+    if (!sel && isMovingPhase() && !isCpuTurn()) for (const t of MAP.territories) if (movableUnits(t.id).length) movable.add(t.id);
     for (const t of MAP.territories) {
       const p = tEls[t.id];
       p.style.fill = fillFor(t);
       p.classList.toggle('sel', !!sel && sel.tid === t.id);
-      p.classList.toggle('reach', reach.includes(t.id));
+      p.classList.toggle('hl', reach.includes(t.id) || movable.has(t.id));
       p.classList.toggle('battle', battleT.has(t.id) || focusBattle === t.id);
       zEls[t.id].style.display = game.hasZombies(t.id) ? '' : 'none';
     }
-    for (const w of MAP.walls) wallEls[w.id].setAttribute('class', 'wall' + (s.walls[w.id] ? '' : ' broken'));
+    for (const w of MAP.walls) {
+      const we = wallEls[w.id];
+      we.slot.setAttribute('class', 'wallslot' + (s.walls[w.id] ? '' : ' broken'));
+      if (we.piece) we.piece.style.display = s.walls[w.id] ? '' : 'none';
+    }
     layers.arrows.style.display = $('mArrows').checked ? '' : 'none';
     layers.roads.style.display = $('mRoads').checked ? '' : 'none';
     renderUnits();
     renderSide();
     renderLog();
     if (s.winner && !render.shownOver) { render.shownOver = true; showGameOver(); }
+  }
+  function isMovingPhase() {
+    const ph = game.s.phase;
+    return ph === 'combatMove' || ph === 'noncombatMove' || (ph === 'zombieMove' && !!game.s.zombieController);
   }
   function endLabel() {
     const ph = game.s.phase;
@@ -224,20 +240,23 @@
     for (const tid in by) {
       const entries = Object.entries(by[tid]).sort((a, b) => order.indexOf(a[0].split(':')[0]) - order.indexOf(b[0].split(':')[0]));
       const t = T[tid];
-      const W = 15, gap = 2;
+      const W = 15, H = 14, gap = 2;
       const total = entries.length * W + (entries.length - 1) * gap;
       let x = t.label[0] - total / 2;
-      const y = t.label[1] + 6;
+      const y = t.label[1] + 10;
       for (const [key, n] of entries) {
         const [owner, type] = key.split(':');
         const g = el('g', { class: 'unitchip', transform: `translate(${x},${y})` }, layers.units);
-        const shape = type === 'tank' ? el('rect', { width: W, height: 10, rx: 1.5 }, g)
-          : (type === 'heli' || type === 'plane') ? el('path', { d: `M0,10 L${W / 2},0 L${W},10 z` }, g)
-            : el('rect', { width: W, height: 10, rx: 5 }, g);
-        shape.setAttribute('class', 'chip-' + owner);
-        shape.setAttribute('stroke', '#fff'); shape.setAttribute('stroke-width', '.8');
-        const tx = el('text', { x: W / 2, y: 7.6 }, g);
-        tx.textContent = (n > 1 ? n : '') + LETTER[type];
+        const bg = el('rect', { width: W, height: H, rx: 3 }, g);
+        bg.setAttribute('class', 'chip-' + owner);
+        const ic = el('g', { transform: `translate(${W / 2},${H / 2}) scale(.55)`, fill: '#fff', color: '#fff' }, g);
+        ic.innerHTML = (window.LaxisArt && window.LaxisArt.UNIT_ICON[type]) || '';
+        if (n > 1) {
+          el('circle', { cx: W - 1, cy: 1, r: 4.6, fill: '#2b2117', stroke: '#fff', 'stroke-width': .7 }, g);
+          const tx = el('text', { x: W - 1, y: 3.3, class: 'count' }, g);
+          tx.textContent = n;
+        }
+        const tt = el('title', {}, g); tt.textContent = `${n} ${SIDE[owner].name} ${UNITS[type].name}`;
         x += W + gap;
       }
     }
@@ -308,7 +327,7 @@
       case 'combatMove':
       case 'noncombatMove':
         h += `<h2>${game.phaseName()}</h2><p class="help">${s.phase === 'combatMove'
-          ? 'Click one of your territories, choose units, then click a highlighted destination. Moving into zombies or enemy units starts a battle. Moving into an empty territory captures it. Land units can only leave or enter the city through a highway gate (yellow) or a breach. Units that stay put can fire from the wall.'
+          ? 'Click one of your territories, choose units, then click a highlighted destination. Moving into zombies or enemy units starts a battle. Moving into an empty territory captures it. Land units can only leave or enter the city through a highway gate (gold wall piece) or a breach. Units that stay put can fire from the wall.'
           : 'Units that did not move or fight may move into friendly territory. Aircraft that flew must end on a landing site (Airport; Gundersen for the helicopter), or they crash.'}</p>`;
         h += moveCard();
         break;

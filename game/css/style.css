@@ -103,21 +103,24 @@ aside {
 .err { color: var(--lax); font-weight: 600; min-height: 1.2em; }
 .chip-LAX { fill: var(--lax); } .chip-ONA { fill: var(--ona); } .chip-Z { fill: var(--zom); }
 /* map */
-.terr { stroke: #3b2f22; stroke-width: 1.4; stroke-linejoin: round; cursor: pointer; transition: fill .15s; }
+.terr { stroke: none; cursor: pointer; transition: fill .15s; }
 .terr.outside { }
-.terr.sel { stroke: var(--accent); stroke-width: 3; }
-.terr.reach { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 3; }
-.terr.battle { stroke: #ff3b1f; stroke-width: 3; }
+.border { fill: none; stroke: #3b2f22; stroke-width: 1.4; stroke-linejoin: round; }
+.terr.sel { filter: brightness(1.32) saturate(1.2); }
+.terr.hl { filter: brightness(1.16) saturate(1.15); }
+.terr.battle { filter: brightness(1.2) saturate(1.6) hue-rotate(-12deg); }
 .tlabel { font-family: 'Patrick Hand', 'Comic Sans MS', sans-serif; font-size: 12px; font-weight: 400; fill: #2b2620; pointer-events: none; text-anchor: middle;
   paint-order: stroke; stroke: rgba(255,255,255,.75); stroke-width: 2.5px; }
 .tvalue { font-family: 'Patrick Hand', 'Comic Sans MS', sans-serif; font-size: 9.5px; fill: #2b2620; pointer-events: none; text-anchor: middle; paint-order: stroke; stroke: rgba(255,255,255,.75); stroke-width: 2px; }
-.wall { stroke: #3b2c1c; stroke-width: 4.5; stroke-linecap: round; fill: none; pointer-events: none; }
-.wall.broken { stroke: #b23a2a; stroke-width: 2.5; stroke-dasharray: 2 4; }
-.road { fill: none; stroke: #f7d66b; stroke-width: 1.6; pointer-events: none; opacity: .9; }
-.road.motorway { stroke: #f0a04b; stroke-width: 2.4; }
+.wallslot-edge { stroke: #3a2412; stroke-width: 7.5; stroke-linecap: round; stroke-linejoin: round; fill: none; opacity: .75; }
+.wallslot { stroke: #e9dcc0; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.wallslot.broken { stroke: #f2c4b8; stroke-dasharray: 3 3; }
+.road { fill: none; stroke: #8a6a3a; stroke-width: 1.1; pointer-events: none; opacity: .32; stroke-linecap: round; stroke-linejoin: round; }
+.road.motorway { stroke-width: 1.8; }
 .water { fill: var(--water); stroke: none; pointer-events: none; }
-.zarrow { stroke: var(--zom); stroke-width: 1.4; fill: none; opacity: .55; pointer-events: none; marker-end: url(#arrowhead); }
-.unitchip text { font-size: 7.5px; font-weight: 700; fill: #fff; text-anchor: middle; pointer-events: none; }
+.zarrow { stroke: var(--zom); stroke-width: 1; stroke-dasharray: 3 3; fill: none; opacity: .18; pointer-events: none; marker-end: url(#arrowhead); }
+.unitchip rect { stroke: #fff; stroke-width: .8; }
+.unitchip text.count { font: 700 6.5px system-ui, sans-serif; fill: #fff; text-anchor: middle; pointer-events: none; }
 .kt { pointer-events: none; }
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); max-width: 520px; }
 dialog::backdrop { background: rgba(0,0,0,.45); }
@@ -129,4 +132,4 @@ label.opt { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
   #mapwrap { min-height: 52vh; }
   header { padding: 6px 16px; }
 }
-.layer-doodles, .layer-gates, .layer-units, .layer-labels, .layer-kt, .layer-walls, .layer-arrows, .layer-roads, .layer-water, .layer-zom { pointer-events: none; }
+.layer-borders, .layer-doodles, .layer-gates, .layer-units, .layer-labels, .layer-kt, .layer-walls, .layer-arrows, .layer-roads, .layer-water, .layer-zom { pointer-events: none; }

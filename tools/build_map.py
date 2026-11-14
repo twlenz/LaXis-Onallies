@@ -493,12 +493,17 @@ def main():
         walls_out.append(dict(id=w["id"], no=i + 1, inside=w["inside"], outside=w["outside"], gate=w["gate"],
                               gateAt=gate_xy, gateRoads=sorted(w["gateRoads"]), path=line_d(ga)))
     road_out = []
+    land_union = unary_union([terr[t]["geom"] for t in ids]).buffer(0.02)
+    in_water = 0.0
     for name, rt, ln in road_geoms:
         g = ln.intersection(FRAME)
+        in_water += g.difference(land_union).length
+        g = g.intersection(land_union)  # roads stay on land; bridges are drawn separately
         if g.is_empty:
             continue
         cls = {"I": "motorway", "U": "trunk", "S": "primary"}.get(rt, "secondary")
         road_out.append(dict(cls=cls, name=name, path=line_d(to_svg(g).simplify(0.4))))
+    print(f"road length clipped off (water / outside the board's land): {in_water:.1f} km")
     water_out = [path_d(to_svg(p).simplify(0.3)) for p in polys(water)]
     backdrop = [dict(path=path_d(to_svg(p).simplify(0.4)), kind="mn") for p in polys(mn_rest)]
     backdrop += [dict(path=path_d(to_svg(p).simplify(0.4)), kind="island") for p in dropped if p.area > 0.02]
