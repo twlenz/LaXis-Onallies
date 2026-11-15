@@ -16,6 +16,14 @@
   let errMsg = '';
   let focusBattle = null;
   let cpuTimer = null;
+  let animFocus = [];      // territories brightened while an action animates
+  let animSkip = new Set(); // unit ids drawn as moving tokens instead of in place
+  const SETTINGS_KEY = 'laxis-onallies-settings-v1';
+  const SPEEDS = { slow: 1600, normal: 800, fast: 350, instant: 0 };
+  let settings = { speed: 'normal' };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
+  function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ignore */ } }
+  function stepDelay() { return SPEEDS[settings.speed] != null ? SPEEDS[settings.speed] : 800; }
   const $ = (id) => document.getElementById(id);
   const svg = $('map');
   const layers = {};
@@ -25,7 +33,8 @@
 
   // ---------------------------------------------------------------- storage
   function save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ s: game.s, cpu })); } catch (e) { /* storage unavailable */ }
+    // the per-move undo stack is session-only; keep saves small
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ s: game.s, cpu }, (k, v) => (k === 'moveUndo' ? undefined : v))); } catch (e) { /* storage unavailable */ }
   }
   function loadSave() {
     try { const j = localStorage.getItem(SAVE_KEY); return j ? JSON.parse(j) : null; } catch (e) { return null; }
@@ -93,22 +102,16 @@
     }
     for (const t of MAP.territories) {
       const [x, y] = t.label;
-      const name = el('text', { x, y: y - 9, class: 'tlabel' }, layers.labels);
+      const name = el('text', { x, y: y - 14, class: 'tlabel' }, layers.labels);
       name.textContent = t.short || t.name;
       if (window.LaxisArt && (t.value || t.kwikTrips)) {
-        const row = el('g', { transform: `translate(${x},${y + 1})` }, layers.labels);
-        row.innerHTML = window.LaxisArt.badgeRow(t.value, t.kwikTrips, 6.5).svg;
-      }
-      if (t.spawn) {
-        const g = el('g', { transform: `translate(${x},${y - 22})` }, layers.labels);
-        el('circle', { r: 6.5, fill: '#3d8b2f', stroke: '#fff', 'stroke-width': 1 }, g);
-        const st = el('text', { y: 3, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: '#fff' }, g);
-        st.textContent = t.spawn;
+        const row = el('g', { transform: `translate(${x},${y}) scale(1.35)` }, layers.labels);
+        row.innerHTML = window.LaxisArt.badgeRow(t.value, t.kwikTrips, 7).svg;
       }
       for (const sp of t.special || []) {
         const icon = { cityhall: '★', airport: '✈', gundersen: '✚' }[sp];
         if (!icon) continue;
-        const it = el('text', { x: x + (sp === 'gundersen' ? -22 : 22), y: y + 5, 'font-size': 11, 'text-anchor': 'middle', fill: '#2b2620', 'pointer-events': 'none' }, layers.labels);
+        const it = el('text', { x: x + (sp === 'gundersen' ? -30 : 30), y: y + 5, 'font-size': 13, 'text-anchor': 'middle', fill: '#2b2620', 'pointer-events': 'none' }, layers.labels);
         it.textContent = icon;
       }
     }
@@ -174,6 +177,7 @@
     const o = game.owner(t.id);
     if (o === 'LAX') return 'var(--lax-soft)';
     if (o === 'ONA') return 'var(--ona-soft)';
+    if (t.spawn) return 'var(--spawn)';
     return t.inside ? 'var(--unowned)' : 'var(--outside)';
   }
   function render() {
@@ -186,6 +190,8 @@
     badge.textContent = side === Z ? (s.zombieController ? `Zombies (${SIDE[s.zombieController].name})` : 'Zombies') : SIDE[side].name;
     $('phase').textContent = game.phaseName();
     $('undoBtn').disabled = !game.canUndo() || isCpuTurn();
+    $('undoMoveBtn').disabled = !game.canUndoMove() || isCpuTurn();
+    $('undoMoveBtn').style.display = isMovingPhase() ? '' : 'none';
     const endBtn = $('endBtn');
     endBtn.textContent = endLabel();
     endBtn.disabled = !!s.winner || isCpuTurn();
@@ -198,7 +204,7 @@
       const p = tEls[t.id];
       p.style.fill = fillFor(t);
       p.classList.toggle('sel', !!sel && sel.tid === t.id);
-      p.classList.toggle('hl', reach.includes(t.id) || movable.has(t.id));
+      p.classList.toggle('hl', reach.includes(t.id) || movable.has(t.id) || animFocus.includes(t.id));
       p.classList.toggle('battle', battleT.has(t.id) || focusBattle === t.id);
       zEls[t.id].style.display = game.hasZombies(t.id) ? '' : 'none';
     }
@@ -226,40 +232,89 @@
       zombieSpawn: 'Roll spawn dice →', zombieCombat: 'Zombies feast →', gameOver: 'Game over',
     }[ph] || 'End phase';
   }
+  const CHIP_W = 22, CHIP_H = 20, CHIP_GAP = 2.5;
+  function drawChip(parent, x, y, owner, type, n) {
+    const g = el('g', { class: 'unitchip', transform: `translate(${x},${y})` }, parent);
+    const bg = el('rect', { width: CHIP_W, height: CHIP_H, rx: 4 }, g);
+    bg.setAttribute('class', 'chip-' + owner);
+    const ic = el('g', { transform: `translate(${CHIP_W / 2},${CHIP_H / 2}) scale(.82)`, fill: '#fff', color: '#fff' }, g);
+    ic.innerHTML = (window.LaxisArt && window.LaxisArt.UNIT_ICON[type]) || '';
+    if (n > 1) {
+      el('circle', { cx: CHIP_W - 1, cy: 1, r: 6.2, fill: '#2b2117', stroke: '#fff', 'stroke-width': .9 }, g);
+      const tx = el('text', { x: CHIP_W - 1, y: 4.2, class: 'count' }, g);
+      tx.textContent = n;
+    }
+    const tt = el('title', {}, g); tt.textContent = `${n} ${SIDE[owner].name} ${UNITS[type].name}`;
+    return g;
+  }
+  function chipOrigin(tid, nChips) {
+    const t = game.T[tid];
+    const total = nChips * CHIP_W + (nChips - 1) * CHIP_GAP;
+    return [t.label[0] - total / 2, t.label[1] + 13];
+  }
   function renderUnits() {
     layers.units.innerHTML = '';
     const by = {};
     for (const u of Object.values(game.s.units)) {
+      if (animSkip.has(u.id)) continue;
       const k = u.at;
       by[k] = by[k] || {};
       const key = u.owner + ':' + u.type;
       by[k][key] = (by[k][key] || 0) + 1;
     }
-    const T = Object.fromEntries(MAP.territories.map(t => [t.id, t]));
     const order = ['LAX', 'ONA', 'Z'];
     for (const tid in by) {
       const entries = Object.entries(by[tid]).sort((a, b) => order.indexOf(a[0].split(':')[0]) - order.indexOf(b[0].split(':')[0]));
-      const t = T[tid];
-      const W = 15, H = 14, gap = 2;
-      const total = entries.length * W + (entries.length - 1) * gap;
-      let x = t.label[0] - total / 2;
-      const y = t.label[1] + 10;
+      let [x, y] = chipOrigin(tid, entries.length);
       for (const [key, n] of entries) {
         const [owner, type] = key.split(':');
-        const g = el('g', { class: 'unitchip', transform: `translate(${x},${y})` }, layers.units);
-        const bg = el('rect', { width: W, height: H, rx: 3 }, g);
-        bg.setAttribute('class', 'chip-' + owner);
-        const ic = el('g', { transform: `translate(${W / 2},${H / 2}) scale(.55)`, fill: '#fff', color: '#fff' }, g);
-        ic.innerHTML = (window.LaxisArt && window.LaxisArt.UNIT_ICON[type]) || '';
-        if (n > 1) {
-          el('circle', { cx: W - 1, cy: 1, r: 4.6, fill: '#2b2117', stroke: '#fff', 'stroke-width': .7 }, g);
-          const tx = el('text', { x: W - 1, y: 3.3, class: 'count' }, g);
-          tx.textContent = n;
-        }
-        const tt = el('title', {}, g); tt.textContent = `${n} ${SIDE[owner].name} ${UNITS[type].name}`;
-        x += W + gap;
+        drawChip(layers.units, x, y, owner, type, n);
+        x += CHIP_W + CHIP_GAP;
       }
     }
+  }
+
+  // ------------------------------------------------------------ animation
+  function positions() {
+    const m = {};
+    for (const id in game.s.units) m[id] = game.s.units[id].at;
+    return m;
+  }
+  /** Unit stacks that changed territory since `before`, grouped by from/to/owner/type. */
+  function diffMoves(before) {
+    const groups = {};
+    for (const id in game.s.units) {
+      const u = game.s.units[id];
+      const from = before[id];
+      if (!from || from === u.at) continue;
+      const k = [from, u.at, u.owner, u.type].join('|');
+      (groups[k] = groups[k] || { from, to: u.at, owner: u.owner, type: u.type, ids: [] }).ids.push(id);
+    }
+    return Object.values(groups);
+  }
+  function animateMoves(moves, ms) {
+    return new Promise((resolve) => {
+      if (!moves.length || ms <= 0) { resolve(); return; }
+      animSkip = new Set(moves.flatMap(m => m.ids));
+      animFocus = [...new Set(moves.flatMap(m => [m.from, m.to]))];
+      render();
+      const tokens = moves.map((m, i) => {
+        const [fx, fy] = chipOrigin(m.from, 1), [tx, ty] = chipOrigin(m.to, 1);
+        const off = (i % 3) * 6;
+        const g = drawChip(layers.units, 0, 0, m.owner, m.type, m.ids.length);
+        g.classList.add('flying');
+        return { g, fx: fx + off, fy: fy + off, tx: tx + off, ty: ty + off };
+      });
+      const t0 = performance.now();
+      const frame = (now) => {
+        const k = Math.min(1, (now - t0) / ms);
+        const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+        for (const tk of tokens) tk.g.setAttribute('transform', `translate(${tk.fx + (tk.tx - tk.fx) * e},${tk.fy + (tk.ty - tk.fy) * e})`);
+        if (k < 1) requestAnimationFrame(frame);
+        else { animSkip = new Set(); animFocus = []; resolve(); }
+      };
+      requestAnimationFrame(frame);
+    });
   }
   function renderLog() {
     const box = $('log');
@@ -270,6 +325,29 @@
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
   function dice(rolls, sixMode) {
     return '<div class="dice">' + rolls.map(r => `<span class="die ${sixMode ? (r.roll === 6 ? 'six' : '') : (r.hit ? 'hit' : '')}" title="${r.type || ''}">${r.roll}</span>`).join('') + '</div>';
+  }
+  /** Dice grouped by unit type: icon, count, the number each type hits on, the dice, and hits. */
+  function diceByType(rolls, stat, owner) {
+    const order = E.CASUALTY_ORDER;
+    const groups = {};
+    for (const r of rolls) (groups[r.type] = groups[r.type] || []).push(r);
+    const types = Object.keys(groups).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    if (!types.length) return '<div class="help">no dice</div>';
+    return types.map(type => {
+      const rs = groups[type];
+      const need = UNITS[type][stat];
+      const hits = rs.filter(r => r.hit).length;
+      const icon = window.LaxisArt ? `<svg class="mini chip-bg-${owner}" viewBox="-11 -11 22 22" width="18" height="18"><g fill="#fff" color="#fff">${window.LaxisArt.UNIT_ICON[type]}</g></svg>` : '';
+      return `<div class="dicerow"><span class="dt">${icon}<span><b>${rs.length} ${UNITS[type].name}</b> <small>hit on ${need === 1 ? '1' : '1–' + need}</small></span></span>` +
+        `<span class="dice">${rs.map(r => `<span class="die ${r.hit ? 'hit' : ''}">${r.roll}</span>`).join('')}</span>` +
+        `<span class="hits">${hits} hit${hits === 1 ? '' : 's'}</span></div>`;
+    }).join('');
+  }
+  function lostText(types) {
+    if (!types || !types.length) return 'no losses';
+    const c = {};
+    for (const t of types) c[t] = (c[t] || 0) + 1;
+    return 'lost ' + Object.keys(c).map(k => `${c[k]} ${UNITS[k].name}`).join(', ');
   }
   function tname(id) { return game.T[id].name; }
   function countsText(units) {
@@ -292,12 +370,13 @@
     h += '</div>';
     const zc = Object.values(s.units).filter(u => u.owner === Z).length;
     const broken = Object.values(s.walls).filter(v => !v).length;
-    h += `<p class="help">Zombies on board: <b>${zc}</b> · Walls breached: <b>${broken}/${MAP.walls.length}</b> · Spawn dice this round: <b>${game.spawnDiceCount()}</b></p>`;
+    h += `<p class="help">Zombies on board: <b>${zc}</b> · Walls breached: <b>${broken}/${MAP.walls.length}</b> · Spawn dice per outskirt this round: <b>${game.spawnDiceCount()}</b></p>`;
     h += `<div class="err" id="err">${escapeHtml(errMsg)}</div>`;
     if (s.winner) {
       h += `<h2>Game over</h2><p>${s.winner === Z ? 'The zombies have taken the Coulee Region.' : SIDE[s.winner].name + ' wins!'}</p>`;
     } else if (isCpuTurn()) {
-      h += `<h2>${SIDE[game.activeSide()].name} (computer) is thinking…</h2>`;
+      h += `<div class="cpu-banner">${SIDE[game.activeSide() === Z ? s.zombieController : game.activeSide()].name} (computer) is playing — ${escapeHtml(game.phaseName())}</div>`;
+      h += `<div class="cpu-lock">${phasePanel()}</div>`;
     } else {
       h += phasePanel();
     }
@@ -344,7 +423,7 @@
         break;
       case 'zombieSpawn':
         h += zombieReport();
-        h += `<h2>Spawn</h2><p class="help">Roll ${game.spawnDiceCount()} dice. Each 6 creates a zombie at a spawn point chosen by another die.</p>`;
+        h += `<h2>Spawn</h2><p class="help">Each of the ${game.spawnTerritories().length} zombie outskirts (green, outer ring) rolls ${game.spawnDiceCount()} ${game.spawnDiceCount() === 1 ? 'die' : 'dice'} on its own. Every 6 is a new zombie there.</p>`;
         break;
       case 'zombieCombat':
         h += zombieReport();
@@ -362,11 +441,15 @@
     if (r.moves.length) h += `<div>Moved: ${r.moves.map(m => `${m.n} ${tname(m.from)} → ${tname(m.to)}`).join('; ')}</div>`;
     if (!r.smashed.length && !r.moves.length) h += '<div class="help">No movement.</div>';
     if (r.spawnDice.length) {
-      h += `<div>Spawn dice:</div>${dice(r.spawnDice, true)}`;
-      if (r.spawned.length) h += `<div>New zombies at: ${r.spawned.map(tname).join(', ')}</div>`;
+      h += '<div class="help" style="margin-top:6px">Spawn rolls (6 = zombie):</div>';
+      for (const sd of r.spawnDice) {
+        h += `<div class="dicerow"><span class="dt">${escapeHtml(tname(sd.tid))}</span><span class="dice">${sd.rolls.map(v => `<span class="die ${v === 6 ? 'six' : ''}">${v}</span>`).join('')}</span><span class="hits">${sd.sixes ? '+' + sd.sixes + ' Z' : ''}</span></div>`;
+      }
     }
     for (const b of r.battles) {
-      h += `<div><b>${tname(b.tid)}</b>: ${b.result === 'attacker' || b.result === 'mutual' ? 'overrun!' : 'held'} (${b.rounds.length} rounds; ${SIDE[b.defender].name} lost ${b.defCas.length}, zombies lost ${b.attCas.length})</div>`;
+      h += `<div style="margin-top:6px"><b>${escapeHtml(tname(b.tid))}</b>: ${b.result === 'attacker' || b.result === 'mutual' ? 'overrun!' : 'held'} after ${b.rounds.length} round${b.rounds.length === 1 ? '' : 's'} (${SIDE[b.defender].name} ${lostText(b.defCas)}; zombies ${lostText(b.attCas)})</div>`;
+      const lr = b.rounds[b.rounds.length - 1];
+      if (lr) h += `<div class="help">Last round, zombies:</div>${diceByType(lr.att, 'att', Z)}<div class="help">${SIDE[b.defender].name}:</div>${diceByType(lr.def, 'def', b.defender)}`;
     }
     return h + '</div>';
   }
@@ -421,7 +504,7 @@
         const shooters = game.unitsAt(wf.from, s.current).filter(u => !UNITS[u.type].air && u.moved === 0);
         h += `<div class="card"><h3>From ${escapeHtml(tname(wf.from))}</h3><div class="help">${countsText(shooters)}</div>`;
         if (wf.fired) {
-          h += `<div>Fired at ${escapeHtml(tname(wf.result.target))}: ${wf.result.killed} zombie(s) destroyed</div>${dice(wf.result.rolls)}`;
+          h += `<div>Fired at ${escapeHtml(tname(wf.result.target))}: ${wf.result.killed} zombie(s) destroyed</div>${diceByType(wf.result.rolls, s.rules.fortifiedStat, s.current)}`;
         } else {
           h += `<div class="row"><select data-wftarget="${wf.from}">${wf.targets.map(t => `<option value="${t}">${escapeHtml(tname(t))} (${game.zombiesAt(t).length} Z)</option>`).join('')}</select>
             <button class="primary" data-wf="${wf.from}">Fire!</button></div>`;
@@ -436,13 +519,18 @@
         <div><b style="color:var(--${b.attacker === 'LAX' ? 'lax' : 'ona'})">${SIDE[b.attacker].name}</b>: ${countsText(att)}</div>
         <div><b style="color:var(--${b.defender === Z ? 'zom' : b.defender === 'LAX' ? 'lax' : 'ona'})">${SIDE[b.defender].name}</b>: ${countsText(def)}</div>`;
       if (b.last) {
-        h += `<div class="help">Round ${b.round}: attacker</div>${dice(b.last.att)}<div class="help">defender</div>${dice(b.last.def)}`;
+        h += `<div class="roundhead">Round ${b.round}</div>`;
+        h += `<div class="help">${SIDE[b.attacker].name} (attacking) — ${lostText(b.last.attLost)}</div>${diceByType(b.last.att, 'att', b.attacker)}`;
+        h += `<div class="help">${SIDE[b.defender].name} (defending) — ${lostText(b.last.defLost)}</div>${diceByType(b.last.def, 'def', b.defender)}`;
       }
       if (!b.done) {
-        h += `<div class="row"><button class="primary" data-roll="${b.tid}">Roll round</button><button data-auto="${b.tid}">Fight to the end</button>`;
+        h += `<div class="row"><button class="primary" data-roll="${b.tid}">Roll ${b.round ? 'next round' : 'first round'}</button><button data-auto="${b.tid}">Fight to the end</button></div>`;
         const ro = game.retreatOptions(b.tid);
-        if (ro.length) h += `<select data-rto="${b.tid}">${ro.map(t => `<option value="${t}">${escapeHtml(tname(t))}</option>`).join('')}</select><button data-retreat="${b.tid}">Retreat</button>`;
-        h += '</div>';
+        if (ro.length) {
+          h += `<div class="help">Or retreat: all your surviving attackers pull back to a territory they attacked from.</div><div class="row">`;
+          h += ro.map(t => `<button data-retreat="${b.tid}" data-to="${t}">Retreat to ${escapeHtml(tname(t))}</button>`).join('');
+          h += '</div>';
+        }
         if (b.defender === Z) h += '<div class="help">If you retreat or are wiped out, your fallen rise as zombies.</div>';
       }
       h += '</div>';
@@ -485,8 +573,10 @@
     side.querySelectorAll('[data-roll]').forEach(b => b.onclick = () => { focusBattle = b.dataset.roll; act(game.battleRound(b.dataset.roll)); });
     side.querySelectorAll('[data-auto]').forEach(b => b.onclick = () => { focusBattle = b.dataset.auto; act(game.autoResolve(b.dataset.auto)); });
     side.querySelectorAll('[data-retreat]').forEach(b => b.onclick = () => {
-      const tid = b.dataset.retreat;
-      act(game.retreat(tid, side.querySelector(`[data-rto="${tid}"]`).value));
+      const before = positions();
+      const res = game.retreat(b.dataset.retreat, b.dataset.to);
+      act(res);
+      if (res.ok) animateMoves(diffMoves(before), Math.min(700, stepDelay() || 0)).then(render);
     });
     side.querySelectorAll('[data-smash]').forEach(b => b.onclick = () => { act(game.zombieSmash(sel.tid, b.dataset.smash)); selectTerritory(sel.tid); render(); });
     side.querySelectorAll('[data-focus]').forEach(c => c.onclick = (ev) => {
@@ -527,10 +617,13 @@
 
   // ---------------------------------------------------------- phase buttons
   function endPhase() {
+    const before = positions();
     const res = game.endPhase();
     sel = null; reach = []; focusBattle = null;
     act(res);
-    scheduleCpu();
+    const moves = res.ok ? diffMoves(before) : [];
+    if (moves.length && stepDelay() > 0) animateMoves(moves, stepDelay() * 0.9).then(() => { render(); scheduleCpu(); });
+    else scheduleCpu();
   }
   function isCpuTurn() {
     if (!game || game.s.winner) return false;
@@ -538,14 +631,34 @@
     if (game.isZombieTurn()) return s.zombieController ? !!cpu[s.zombieController] : false;
     return !!cpu[s.current];
   }
-  function scheduleCpu() {
+  function scheduleCpu(wait) {
     clearTimeout(cpuTimer);
     if (!isCpuTurn() || !AI) return;
-    cpuTimer = setTimeout(() => {
-      AI.step(game);
-      save(); render();
-      scheduleCpu();
-    }, 350);
+    const d = stepDelay();
+    cpuTimer = setTimeout(cpuStep, wait != null ? wait : (d === 0 ? 0 : Math.max(150, d * 0.5)));
+  }
+  function cpuStep() {
+    if (!isCpuTurn()) return;
+    const before = positions();
+    const phase = game.s.phase;
+    const rounds = Object.fromEntries((game.s.battles || []).map(b => [b.tid, b.round]));
+    AI.step(game);
+    save();
+    const d = stepDelay();
+    // keep the battle being fought in view
+    const fought = (game.s.battles || []).find(b => b.round !== rounds[b.tid]);
+    if (fought) focusBattle = fought.tid;
+    else if (game.s.phase !== 'combat') focusBattle = null;
+    const moves = diffMoves(before);
+    if (moves.length && d > 0) {
+      animateMoves(moves, d * 0.8).then(() => { render(); scheduleCpu(d * 0.3); });
+      return;
+    }
+    render();
+    if (d === 0) { scheduleCpu(0); return; }
+    // quick steps (buying) go faster; dice and phase changes linger so they can be read
+    const pause = phase === 'purchase' && game.s.phase === 'purchase' ? d * 0.35 : fought ? d * 1.1 : d * 0.6;
+    scheduleCpu(pause);
   }
 
   // ------------------------------------------------------------- dialogs
@@ -581,10 +694,13 @@
     $('startBtn').onclick = startNew;
     $('endBtn').onclick = endPhase;
     $('undoBtn').onclick = () => { sel = null; reach = []; act(game.undoPhase()); };
+    $('undoMoveBtn').onclick = () => { sel = null; reach = []; act(game.undoMove()); };
     $('menuBtn').onclick = () => $('menuDlg').showModal();
     $('mClose').onclick = () => $('menuDlg').close();
     $('mNew').onclick = () => { $('menuDlg').close(); $('resumeBtn').style.display = 'none'; $('newDlg').showModal(); };
     $('mArrows').onchange = render; $('mRoads').onchange = render;
+    $('mSpeed').value = settings.speed;
+    $('mSpeed').onchange = () => { settings.speed = $('mSpeed').value; saveSettings(); };
     $('mExport').onclick = () => {
       const blob = new Blob([JSON.stringify({ s: game.s, cpu }, null, 1)], { type: 'application/json' });
       const a = document.createElement('a');

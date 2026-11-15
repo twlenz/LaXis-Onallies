@@ -4,7 +4,7 @@
 //   print/board-poster-24x30.pdf    one sheet for a print shop
 //   print/board-tiled-letter.pdf    tiles for home printers (trim & tape)
 //   print/counters.pdf              units, control markers, wall pieces
-//   print/player-aid.pdf            turn sequence, unit chart, setup, spawn table
+//   print/player-aid.pdf            turn sequence, unit chart, setup, zombie outskirts
 //   print/trackers.pdf              supply/oil/round tracks
 //   print/rulebook.pdf + docs/rules.html
 'use strict';
@@ -129,7 +129,7 @@ function playerAid() {
   const rows = ['inf', 'tank', 'heli', 'plane', 'zombie'].map(t => {
     const u = UNITS[t];
     const who = t === 'heli' ? 'La Crosse' : t === 'plane' ? 'Onalaska' : t === 'zombie' ? 'Horde' : 'Both';
-    const notes = { inf: '', tank: '1 oil to move each turn; blitz', heli: 'Carries 1 infantry; Airport or Gundersen', plane: 'Lands at the Airport', zombie: 'Cannot cross intact walls; never retreats' }[t];
+    const notes = { inf: '', tank: '1 oil to move each turn; blitz', heli: '1 oil to move each turn; carries 1 infantry; Airport or Gundersen', plane: '1 oil to move each turn; lands at the Airport', zombie: 'Cannot cross intact walls; never retreats' }[t];
     return `<tr><td>${icon(t, '#333', 16)} ${u.name}</td><td>${who}</td><td>${u.cost || '—'}</td><td>${u.att}</td><td>${u.def}</td><td>${u.move}</td><td>${notes}</td></tr>`;
   }).join('');
   const setup = (g) => MAP.territories.filter(t => t.group === g).map(t => {
@@ -137,7 +137,7 @@ function playerAid() {
     const units = Object.keys(su).map(k => `${su[k]} ${UNITS[k].name}`).join(', ') || '—';
     return `<tr><td>${t.name}</td><td>${t.value}</td><td>${t.kwikTrips || ''}</td><td>${units}</td></tr>`;
   }).join('');
-  const spawns = MAP.territories.filter(t => t.spawn).sort((a, b) => a.spawn - b.spawn).map(t => `<tr><td><b>${t.spawn}</b></td><td>${t.name}</td></tr>`).join('');
+  const spawns = MAP.territories.filter(t => t.spawn).sort((a, b) => a.spawn - b.spawn).map(t => t.name).join(' · ');
   const outside = MAP.territories.filter(t => t.group === 'OUT' && !t.spawn).map(t => `${t.name} (${t.value}${t.kwikTrips ? ', ' + t.kwikTrips + ' oil' : ''})`).join(' · ');
   const income = (g) => MAP.territories.filter(t => t.group === g).reduce((s, t) => s + t.value, 0);
   const oil = (g) => MAP.territories.filter(t => t.group === g).reduce((s, t) => s + t.kwikTrips, 0);
@@ -156,7 +156,7 @@ function playerAid() {
     </ol></div><div>
     <h2>Zombie turn</h2><ol>
       <li><b>March</b> 1 territory inward along the arrow. If the arrow crosses an intact wall, <b>tear it down</b> instead.</li>
-      <li><b>Spawn</b>: roll ⌈round ÷ 2⌉ dice. Each <b>6</b> → 1 zombie at spawn point (roll 1–6).</li>
+      <li><b>Spawn</b>: <b>each</b> zombie outskirt rolls ⌈round ÷ 2⌉ dice on its own. Each <b>6</b> → 1 zombie in that outskirt.</li>
       <li><b>Feast</b>: zombies attack every territory they share with you, fighting to the end.</li>
     </ol></div></div>
     <h2>Units (hit on a roll ≤ value)</h2>
@@ -180,7 +180,7 @@ function playerAid() {
     <div><h2 class="ona">Onalaska — income ${income('ONA')} SP, ${oil('ONA')} oil</h2>
       <table><tr><th>Territory</th><th>SP</th><th>Oil</th><th>Start</th></tr>${setup('ONA')}</table>
       <h2>French Island (neutral)</h2><table><tr><th>Territory</th><th>SP</th><th>Oil</th><th>Start</th></tr>${setup('FI')}</table>
-      <h2 class="zom">Spawn points</h2><table><tr><th>d6</th><th>Spawn territory</th></tr>${spawns}</table>
+      <h2 class="zom">Zombie outskirts</h2><p>${spawns}</p>
     </div></div>
     <h2>Outside the wall (unowned at start)</h2><p>${outside}</p>
   </div></body></html>`;
@@ -202,9 +202,9 @@ function trackers() {
     ${track(64, 'Onalaska supply (SP)', COLORS.onaEdge)}
     ${track(25, 'Onalaska oil', COLORS.onaEdge)}
     <div style="page-break-before:always"></div>
-    <h1>Round &amp; spawn dice</h1>
+    <h1>Round &amp; spawn dice (per outskirt)</h1>
     <table><tr><th>Round</th>${Array.from({ length: 20 }, (_, i) => `<th>${i + 1}</th>`).join('')}</tr>
-    <tr><td>Spawn dice</td>${Array.from({ length: 20 }, (_, i) => `<td>${Math.ceil((i + 1) / 2)}</td>`).join('')}</tr></table>
+    <tr><td>Dice per outskirt</td>${Array.from({ length: 20 }, (_, i) => `<td>${Math.ceil((i + 1) / 2)}</td>`).join('')}</tr></table>
     <p style="font-size:9pt">Rounds past 20: dice = round ÷ 2, rounded up.</p>
   </body></html>`;
 }

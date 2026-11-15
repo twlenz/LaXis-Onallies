@@ -14,7 +14,7 @@ An area-control war game set in **La Crosse** and **Onalaska, Wisconsin**. La Cr
 | `board-poster-24x27.pdf` | The full board on one 24 × 27 inch sheet (print shop) |
 | `board-tiled-letter.pdf` | The same board as letter-size tiles to trim and tape |
 | `counters.pdf` | Infantry, tanks, the Gundersen Helicopter, the Onalaska Plane, zombies, stack chips, control markers, numbered wall pieces |
-| `player-aid.pdf` | Turn sequence, unit chart, wall and zombie rules, setup table, spawn table |
+| `player-aid.pdf` | Turn sequence, unit chart, wall and zombie rules, setup table |
 | `trackers.pdf` | Supply (SP), oil and round tracks |
 | `rulebook.pdf` | The full rules ([HTML](docs/rules.html), [Markdown](docs/RULES.md)) |
 | `board.svg` | Vector board for editing |
@@ -23,8 +23,8 @@ An area-control war game set in **La Crosse** and **Onalaska, Wisconsin**. La Cr
 
 - **The board:** 16 La Crosse neighborhoods, 12 Onalaska neighborhoods and 2 territories on French Island sit inside a wall. Three rings of territories surround them to the north, east and south, including Holmen, Midway, Medary, Shelby and Barre Mills. A three-territory spoke runs west across the Cass Street bridge: Pettibone, La Crescent and the Minnesota Bluffs.
 - **Win:** own every territory inside the wall with no zombies inside, and hold that for a full round.
-- **Units:** infantry, tanks (each move costs 1 oil, and oil comes from Kwik Trips), La Crosse's **Gundersen Helicopter** and Onalaska's **Plane**. Aircraft can only be bought and flown while you hold the **airport on French Island**.
-- **Zombies** attack at 3 and defend at 2. Each round, roll round ÷ 2 dice (rounded up). Every 6 spawns a zombie in one of the six outer-ring territories. Zombies march **one ring inward per turn** with no decisions to make.
+- **Units:** infantry, tanks (1 oil to move in a turn; oil comes from Kwik Trips), La Crosse's **Gundersen Helicopter** and Onalaska's **Plane** (also 1 oil to move in a turn). Aircraft can only be bought and flown while you hold the **airport on French Island**.
+- **Zombies** attack at 3 and defend at 2. Each round, every one of the six outer-ring outskirts rolls round ÷ 2 dice (rounded up) on its own, and every 6 is a new zombie there. Zombies march **one ring inward per turn** with no decisions to make.
 - **The wall and its gates:** there is no wall between the two cities. Your land units can leave or enter the city only at **highway gates**: WI-35 and US-53 north; I-90, WI-16 and State Road east; Mormon Coulee Road south; the Cass Street bridge west. A torn-down segment also lets units through. Zombies spend a turn next to the wall, tear it down the next turn, then walk in. Walls are never rebuilt. Units that stay put fire over intact walls, and the zombies can't hit back.
 - **Rising dead:** units you lose when zombies beat you, or when you attack zombies and lose or retreat, become zombies.
 - **Defeat:** end your turn without your City Hall and you're out. Your survivors turn, and **you command the horde** for the rest of the game.

@@ -83,7 +83,7 @@
 <li><strong>Outside the wall</strong>: three <strong>rings</strong> of territories surround the cities on the north, east and south sides.<ul>
 <li><strong>Ring 1</strong> touches the wall.</li>
 <li><strong>Ring 2</strong> is the middle ring. It includes <strong>Holmen</strong> (worth 3).</li>
-<li><strong>Ring 3</strong> is the outer ring. Its six territories are the <strong>zombie spawn points</strong>, numbered <strong>1–6</strong>.</li>
+<li><strong>Ring 3</strong> is the outer ring. Its six territories are the <strong>zombie outskirts</strong>, where new zombies appear.</li>
 <li>Rings 1 and 2 are worth income, but they are exposed to the horde.</li>
 </ul>
 </li>
@@ -116,7 +116,7 @@
 <li>Place a control marker on each La Crosse territory (red) and each Onalaska territory (blue). French Island and all outside territories start <strong>unowned</strong>.</li>
 <li>Place a wall piece on every wall segment.</li>
 <li>Each player starts with <strong>SP equal to their income</strong> and <strong>2 oil</strong>.</li>
-<li><em>Optional, &quot;Outbreak&quot; variant:</em> place 1 zombie on each spawn territory.</li>
+<li><em>Optional, &quot;Outbreak&quot; variant:</em> place 1 zombie on each zombie outskirt.</li>
 <li>La Crosse goes first.</li>
 </ol>
 <h2>5. Sequence of play</h2>
@@ -172,7 +172,7 @@
 <td>2</td>
 <td>3</td>
 <td>3</td>
-<td>Carries 1 infantry; lands at Gundersen or the Airport</td>
+<td><strong>Costs 1 oil to move</strong> each turn; carries 1 infantry; lands at Gundersen or the Airport</td>
 </tr>
 <tr>
 <td>Plane (Onalaska only)</td>
@@ -180,7 +180,7 @@
 <td>4</td>
 <td>2</td>
 <td>4</td>
-<td>Lands at the Airport</td>
+<td><strong>Costs 1 oil to move</strong> each turn; lands at the Airport</td>
 </tr>
 <tr>
 <td>Zombie</td>
@@ -191,9 +191,10 @@
 <td>Cannot cross an intact wall; never retreats</td>
 </tr>
 </tbody></table>
-<h3>Oil and tanks</h3>
+<h3>Oil</h3>
 <ul>
-<li>Moving a tank costs <strong>1 oil</strong> the first time it moves in a turn (either move phase). Tanks without oil stay put, but they still defend and can fire from the wall.</li>
+<li><strong>Tanks, the helicopter and the plane</strong> each cost <strong>1 oil</strong> the first time they move in a turn, in either move phase. It&#39;s 1 oil to move at all, not 1 per space, and an aircraft that flies out in combat move and back in noncombat move pays only once. Infantry carried by the helicopter cost nothing.</li>
+<li>Units without oil stay put. They still defend, and tanks can still fire from the wall.</li>
 <li>At <strong>Collect Income</strong>, gain <strong>1 oil for each Kwik Trip</strong> in territories you control.</li>
 </ul>
 <h3>Blitzing</h3>
@@ -254,7 +255,7 @@
 <h2>9. The zombie turn</h2>
 <ol>
 <li><strong>Shamble</strong>: move every zombie stack (see below).</li>
-<li><strong>Spawn</strong>: roll <strong>round ÷ 2 dice, rounded up</strong> (round 1: 1 die; round 2: 1 die; round 3: 2 dice; round 6: 3 dice …). <strong>Each 6 creates one zombie.</strong> For each new zombie, roll another die for its <strong>spawn point (1–6, the outer-ring territories)</strong> and place it there. New zombies do not move until the next zombie turn.</li>
+<li><strong>Spawn</strong>: at <strong>each of the six zombie outskirts, separately</strong>, roll <strong>round ÷ 2 dice, rounded up</strong> (round 1: 1 die each; round 3: 2 dice each; round 6: 3 dice each …). <strong>Each 6 is one new zombie in that outskirt.</strong> New zombies do not move until the next zombie turn.</li>
 <li><strong>Feast</strong>: resolve every battle where zombies share a territory with player units (§8).</li>
 </ol>
 <h3>Automatic zombies (while both players are alive)</h3>
@@ -290,9 +291,9 @@
 <h2>11. Quick reference</h2>
 <pre><code>ROUND:  La Crosse → Onalaska → Zombies
 TURN:   Purchase → Combat Move → Combat (wall fire first) → Noncombat Move → Mobilize → Income
-ZOMBIE: Shamble (or smash wall) → Spawn (ceil(round/2) dice, each 6 = zombie, roll spawn point) → Feast
+ZOMBIE: Shamble (or smash wall) → Spawn (each outskirt rolls ceil(round/2) dice; each 6 = a zombie there) → Feast
 HIT:    roll ≤ value.   Zombies A3 D2 M1.   Infantry 3 SP A1 D2 M1.   Tank 6 SP A3 D3 M2 (1 oil).
-        Helicopter (LAX) 10 SP A2 D3 M3 carries 1 inf.   Plane (ONA) 10 SP A4 D2 M4.
+        Helicopter (LAX) 10 SP A2 D3 M3 carries 1 inf (1 oil).   Plane (ONA) 10 SP A4 D2 M4 (1 oil).
 WALL:   arrive → next zombie turn smash → next zombie turn enter.  Never rebuilt.
         Land units cross only at highway gates or breaches. Aircraft fly over.
         Fortified (didn&#39;t move) units fire once per turn at Defense value, no return fire.
@@ -308,7 +309,7 @@ LOSE:   end your turn without your City Hall (or with no land units). Then you r
 <li><strong>Tank crews rise as zombies</strong> like infantry. Aircraft never rise.</li>
 <li><strong>Defeated players&#39; surviving units become zombies.</strong> This gives the new zombie commander a real force.</li>
 <li><strong>One aircraft per side</strong>, and both need the Airport to buy or fly.</li>
-<li><strong>The zombie spawn rate starts low</strong> (expected zombies per round = dice ÷ 6). If games feel too calm early, use the Outbreak variant (§4).</li>
+<li><strong>Spawning is per outskirt.</strong> In round 1 the six outskirts produce one zombie between them on average; by round 10 it&#39;s five per round. If early rounds feel too calm, use the Outbreak variant (§4).</li>
 <li><strong>Breaches count as openings for both sides.</strong> Once zombies tear down a segment, your land units can also move through the gap.</li>
 <li><strong>The I-90 bridge from French Island to Minnesota is out.</strong> The only way west is the Cass Street bridge.</li>
 <li><strong>Only Kwik Trip stations that sell gas count as oil.</strong> Kwik Trip&#39;s La Crosse campus (distribution center, kitchen, support offices) does not.</li>
