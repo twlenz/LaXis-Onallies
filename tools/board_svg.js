@@ -114,15 +114,13 @@ function boardSVG(map, opts = {}) {
     const [x, y] = t.label;
     const fs1 = t.area > 9000 ? 13 : t.area > 3000 ? 10.5 : 8.8;
     o.push(`<text x="${x}" y="${y - 4}" font-size="${fs1}" text-anchor="middle" fill="${COLORS.ink}" stroke="#fffaf0" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${esc(t.short || t.name)}</text>`);
-    if (t.value || t.kwikTrips) o.push(`<g transform="translate(${x},${y + 8})">${badgeRow(t.value, t.kwikTrips, 7.5).svg}</g>`);
+    if (t.value || t.kwikTrips) o.push(`<g transform="translate(${x},${y + 9}) scale(1.3)">${badgeRow(t.value, t.kwikTrips, 7.5).svg}</g>`);
     let ix = x - 10;
     for (const sp of t.special || []) {
       const icon = { cityhall: ICONS.star, airport: ICONS.plane, gundersen: ICONS.cross }[sp];
       if (icon) { o.push(`<g transform="translate(${ix},${y + 25}) scale(1.4)">${icon}</g>`); ix += 18; }
     }
-    if (t.spawn) {
-      o.push(`<g transform="translate(${x},${y + 28})"><rect x="-10" y="-10" width="20" height="20" rx="4" fill="#fff" stroke="${COLORS.zom}" stroke-width="2"/><text y="6" font-size="16" text-anchor="middle" fill="${COLORS.zom}" font-family="Bangers, ${HAND}">${t.spawn}</text></g>`);
-    }
+
   }
   if (opts.cartouche !== false) o.push(cartouche(x0, y0, W, H));
   o.push(`<text x="${x0 + W - 6}" y="${y0 + H - 6}" font-size="8" text-anchor="end" fill="#33302a">Not to scale. Roads: US Census TIGER/Line. Kwik Trips: Kwik Trip store list.</text>`);
@@ -140,7 +138,7 @@ function cartouche(x0, y0, W, H) {
     <rect x="12" y="62" width="14" height="10" fill="${COLORS.LAX}" stroke="${COLORS.border}"/><text x="32" y="71">La Crosse</text>
     <rect x="120" y="62" width="14" height="10" fill="${COLORS.ONA}" stroke="${COLORS.border}"/><text x="140" y="71">Onalaska</text>
     <rect x="12" y="78" width="14" height="10" fill="${COLORS.FI}" stroke="${COLORS.border}"/><text x="32" y="87">French Island (neutral)</text>
-    <rect x="12" y="94" width="14" height="10" fill="${COLORS.OUT}" stroke="${COLORS.border}"/><rect x="28" y="94" width="14" height="10" fill="${COLORS.OUT2}" stroke="${COLORS.border}"/><rect x="44" y="94" width="14" height="10" fill="url(#spawnhatch)" stroke="${COLORS.border}"/><text x="64" y="103">Rings 1 · 2 · 3 (3 = spawn 1–6)</text>
+    <rect x="12" y="94" width="14" height="10" fill="${COLORS.OUT}" stroke="${COLORS.border}"/><rect x="28" y="94" width="14" height="10" fill="${COLORS.OUT2}" stroke="${COLORS.border}"/><rect x="44" y="94" width="14" height="10" fill="url(#spawnhatch)" stroke="${COLORS.border}"/><text x="64" y="103">Rings 1 · 2 · 3 (3 = zombie outskirts)</text>
     <g transform="translate(20,116)">${wallBar(16, false)}</g><text x="34" y="120">Wall piece (W#)</text>
     <g transform="translate(142,116)">${wallBar(16, true)}</g><text x="156" y="120">Highway gate</text>
     <path d="M12,134 h14" stroke="${COLORS.zom}" stroke-width="2.4" stroke-dasharray="4 3" marker-end="url(#zarr)" opacity=".5"/><text x="34" y="137">Zombies march this way</text>

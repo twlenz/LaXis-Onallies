@@ -13,7 +13,8 @@
   <span id="sidebadge" class="badge"></span>
   <span id="phase" class="phase"></span>
   <span class="spacer"></span>
-  <button id="undoBtn" title="Reset this phase to how it started">Undo phase</button>
+  <button id="undoMoveBtn" title="Take back your last move">↶ Undo move</button>
+  <button id="undoBtn" title="Put everything back to how this phase started">Reset phase</button>
   <button id="endBtn" class="primary">End phase</button>
   <button id="menuBtn">Menu</button>
 </header>
@@ -63,8 +64,10 @@
   <div class="row"><button id="mExport">Download save file</button>
     <label><button id="mImportBtn">Load save file…</button><input id="mImport" type="file" accept=".json" hidden></label></div>
   <div class="row"><a href="../docs/rules.html" target="_blank" rel="noopener">Rulebook</a></div>
-  <div class="row"><label><input type="checkbox" id="mArrows" checked> Show zombie road arrows</label></div>
+  <div class="row"><label><input type="checkbox" id="mArrows" checked> Show zombie arrows</label></div>
   <div class="row"><label><input type="checkbox" id="mRoads" checked> Show highways</label></div>
+  <div class="row"><label>Computer speed
+    <select id="mSpeed"><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option><option value="instant">Instant (no animation)</option></select></label></div>
   <div class="row" style="justify-content:flex-end"><button id="mClose" class="primary">Close</button></div>
 </dialog>
 

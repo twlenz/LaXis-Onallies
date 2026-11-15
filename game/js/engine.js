@@ -24,11 +24,11 @@
     inf: { name: 'Infantry', cost: 3, att: 1, def: 2, move: 1, land: true },
     tank: { name: 'Tank', cost: 6, att: 3, def: 3, move: 2, land: true, oil: 1 },
     heli: {
-      name: 'Gundersen Helicopter', cost: 10, att: 2, def: 3, move: 3, air: true,
+      name: 'Gundersen Helicopter', cost: 10, att: 2, def: 3, move: 3, air: true, oil: 1,
       carry: 1, only: 'LAX', max: 1, landsAt: ['airport', 'gundersen'],
     },
     plane: {
-      name: 'Onalaska Plane', cost: 10, att: 4, def: 2, move: 4, air: true,
+      name: 'Onalaska Plane', cost: 10, att: 4, def: 2, move: 4, air: true, oil: 1,
       only: 'ONA', max: 1, landsAt: ['airport'],
     },
     zombie: { name: 'Zombie', cost: 0, att: 3, def: 2, move: 1, land: true },
@@ -219,7 +219,33 @@
     takeSnapshot() {
       const copy = Object.assign({}, this.s);
       delete copy.snapshot;
+      delete copy.moveUndo;
       this.s.snapshot = clone(copy);
+      this.s.moveUndo = [];
+    }
+
+    // --- per-move undo (movement phases): a stack of states taken before each move
+    _pushMoveUndo() {
+      const copy = Object.assign({}, this.s);
+      delete copy.snapshot;
+      delete copy.moveUndo;
+      (this.s.moveUndo = this.s.moveUndo || []).push(JSON.stringify(copy));
+    }
+    canUndoMove() {
+      const movePhase = this._isMovePhase() || (this.s.phase === 'zombieMove' && !!this.s.zombieController);
+      return movePhase && !!(this.s.moveUndo && this.s.moveUndo.length);
+    }
+    undoMove() {
+      if (!this.canUndoMove()) return fail('No move to undo.');
+      const stack = this.s.moveUndo;
+      const snap = this.s.snapshot;
+      const prev = JSON.parse(stack.pop());
+      Object.keys(this.s).forEach(k => delete this.s[k]);
+      Object.assign(this.s, prev);
+      this.s.snapshot = snap;
+      this.s.moveUndo = stack;
+      this.log('Move taken back.');
+      return ok();
     }
     canUndo() { return !!this.s.snapshot && ['purchase', 'combatMove', 'noncombatMove', 'zombieMove'].includes(this.s.phase); }
     undoPhase() {
@@ -229,6 +255,7 @@
       Object.keys(this.s).forEach(k => delete this.s[k]);
       Object.assign(this.s, clone(snap));
       this.s.snapshot = snap;
+      this.s.moveUndo = [];
       this.s.log.length = logLen;
       this.log('Phase reset.');
       return ok();
@@ -275,6 +302,8 @@
       const p = this.s.current;
       if (!this._isMovePhase() || u.owner !== p) return false;
       const def = UNITS[u.type];
+      // tanks and aircraft burn 1 oil the first time they move in a turn
+      if (def.oil && !u.oilPaid && this.s.players[p].oil < def.oil) return false;
       if (def.air) {
         if (!this.airportControlled(p)) return false; // grounded
         return u.moved < def.move;
@@ -373,9 +402,10 @@
       }
       const path = this.findPath(unitIds, from, to);
       if (!path) return fail('No legal path for those units.');
-      const tanks = units.filter(u => u.type === 'tank' && !u.oilPaid);
-      if (tanks.length > this.s.players[p].oil) return fail(`Not enough oil: ${tanks.length} needed, ${this.s.players[p].oil} available.`);
+      const fuelers = units.filter(u => UNITS[u.type].oil && !u.oilPaid);
+      if (fuelers.length > this.s.players[p].oil) return fail(`Not enough oil: ${fuelers.length} needed, ${this.s.players[p].oil} available.`);
       const g = this._group(units);
+      this._pushMoveUndo();
       // blitz capture of intermediate territories
       if (!g.flying && this.s.phase === 'combatMove') {
         for (const tid of path.path.slice(1, -1)) {
@@ -385,7 +415,7 @@
           }
         }
       }
-      for (const u of tanks) { u.oilPaid = true; this.s.players[p].oil -= 1; }
+      for (const u of fuelers) { u.oilPaid = true; this.s.players[p].oil -= UNITS[u.type].oil; }
       for (const u of units) {
         if (UNITS[u.type].air) u.moved += path.cost;
         else u.moved = UNITS[u.type].move; // land units finish moving
@@ -562,6 +592,7 @@
     endPhase() {
       const s = this.s;
       if (s.winner) return fail('The game is over.');
+      s.moveUndo = [];
       switch (s.phase) {
         case 'purchase':
           s.phase = 'combatMove';
@@ -776,6 +807,7 @@
       if (!units.length || units.some(u => !u || u.at !== from || !this.zombieCanMove(u))) return fail('Those zombies cannot move.');
       if (!this.adj[from].has(to)) return fail('Zombies move one territory at a time.');
       if (this.wallIntact(from, to)) return fail('An intact wall blocks the way. Smash it first (takes a turn).');
+      this._pushMoveUndo();
       for (const u of units) { u.at = to; u.moved = 1; }
       this.s.zombieReport.moves.push({ from, to, n: units.length });
       this.log(`${units.length} zombie(s) shamble ${this.T[from].name} → ${this.T[to].name}.`, 'zombie');
@@ -787,6 +819,7 @@
       if (!w || !this.s.walls[w]) return fail('No intact wall there.');
       const zs = this.zombiesAt(from).filter(u => this.zombieCanMove(u));
       if (!zs.length) return fail('Need zombies that have not moved this turn next to the wall.');
+      this._pushMoveUndo();
       this.s.walls[w] = false;
       for (const u of zs) u.smashed = true;
       this.s.zombieReport.smashed.push(w);
@@ -794,28 +827,24 @@
       return ok();
     }
 
+    /** Dice rolled at EACH zombie outskirt (outer-ring territory) this round. */
     spawnDiceCount() { return Math.ceil(this.s.round / 2); }
+    spawnTerritories() { return this.map.territories.filter(t => t.spawn).sort((a, b) => a.spawn - b.spawn); }
 
     _zombieSpawn() {
       const s = this.s;
       const rep = s.zombieReport;
       const n = this.spawnDiceCount();
-      const spawns = this.map.territories.filter(t => t.spawn).sort((a, b) => a.spawn - b.spawn);
-      for (let i = 0; i < n; i++) {
-        const r = this.d6();
-        const entry = { roll: r };
-        if (r === 6) {
-          const loc = this.d6();
-          const t = spawns.find(x => x.spawn === loc) || spawns[(loc - 1) % spawns.length];
-          this._addUnit('zombie', Z, t.id);
-          entry.loc = loc;
-          entry.tid = t.id;
-          rep.spawned.push(t.id);
-          this.log(`A zombie claws its way out at ${t.name} (spawn ${loc}).`, 'zombie');
-        }
-        rep.spawnDice.push(entry);
+      // every outskirt rolls its own dice; each 6 is a zombie there
+      for (const t of this.spawnTerritories()) {
+        const rolls = [];
+        for (let i = 0; i < n; i++) rolls.push(this.d6());
+        const sixes = rolls.filter(r => r === 6).length;
+        for (let i = 0; i < sixes; i++) { this._addUnit('zombie', Z, t.id); rep.spawned.push(t.id); }
+        rep.spawnDice.push({ tid: t.id, rolls, sixes });
+        if (sixes) this.log(`${sixes} zombie(s) claw their way out at ${t.name}.`, 'zombie');
       }
-      if (!rep.spawned.length) this.log(`Spawn roll: ${rep.spawnDice.map(d => d.roll).join(', ')} — no new zombies.`, 'zombie');
+      if (!rep.spawned.length) this.log(`Spawn rolls: no sixes at any outskirt — no new zombies.`, 'zombie');
     }
 
     _zombieCombat() {

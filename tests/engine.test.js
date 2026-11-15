@@ -117,11 +117,11 @@ test('zombie attack that wins turns the dead defenders into zombies', () => {
   g.s.walls['GUN|SOUTH'] = false;
   for (let i = 0; i < 3; i++) g._addUnit('zombie', 'Z', 'SOUTH');
   skipTo(g, 'zombieMove');
-  // movement: no dice. spawn: 1 die -> 1. combat round: zombies 3 dice all hit (1), defender misses (6)
-  rig(g, [1, 1, 1, 1, 6]);
+  // movement: no dice. spawn: 1 die at each of 6 outskirts (all 1). combat: zombies hit x3 (1), defender misses (6)
+  rig(g, [1, 1, 1, 1, 1, 1, 1, 1, 1, 6]);
   g.endPhase(); // move SOUTH -> GUN
   assert.equal(g.zombiesAt('GUN').length, 3);
-  g.endPhase(); // spawn (roll 1: none)
+  g.endPhase(); // spawn (no sixes)
   g.endPhase(); // combat
   assert.equal(g.unitsAt('GUN', 'LAX').length, 0);
   assert.equal(g.zombiesAt('GUN').length, 4, '3 attackers + 1 risen infantry');
@@ -134,7 +134,7 @@ test('zombie attack that is repelled does not create zombies', () => {
   g.s.walls['GUN|SOUTH'] = false;
   g._addUnit('zombie', 'Z', 'SOUTH');
   skipTo(g, 'zombieMove');
-  rig(g, [1, 4, 1]); // spawn die 1; zombie misses (4), defender hits (1)
+  rig(g, [1, 1, 1, 1, 1, 1, 4, 1]); // 6 quiet spawn dice; zombie misses (4), defender hits (1)
   g.endPhase(); g.endPhase(); g.endPhase();
   assert.equal(g.zombiesAt('GUN').length, 0);
   assert.equal(g.unitsAt('GUN', 'LAX').length, 1);
@@ -188,10 +188,27 @@ test('aircraft crash if they do not end at a landing site', () => {
   g.s.territories.FI.owner = 'LAX';
   const heli = g._addUnit('heli', 'LAX', 'GUN');
   skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 5;
   assert.ok(g.move([heli.id], 'GUN', 'LN').ok);
   skipTo(g, 'noncombatMove');
   g.endPhase();
   assert.equal(g.s.units[heli.id], undefined);
+});
+
+test('aircraft pay 1 oil to move in a turn, not per space, and only once per turn', () => {
+  const g = newGame();
+  g.s.territories.FI.owner = 'LAX';
+  const heli = g._addUnit('heli', 'LAX', 'GUN');
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 0;
+  assert.equal(g.unitCanMove(heli), false, 'no oil, no flight');
+  assert.equal(g.move([heli.id], 'GUN', 'LN').ok, false);
+  g.s.players.LAX.oil = 1;
+  assert.ok(g.move([heli.id], 'GUN', 'LN').ok, 'two spaces for one oil');
+  assert.equal(g.s.players.LAX.oil, 0);
+  skipTo(g, 'noncombatMove');
+  assert.ok(g.move([heli.id], 'LN', 'LDT').ok, 'already fuelled this turn');
+  assert.equal(g.s.players.LAX.oil, 0);
 });
 
 test('helicopter can carry one infantry farther than it could walk', () => {
@@ -200,7 +217,9 @@ test('helicopter can carry one infantry farther than it could walk', () => {
   const heli = g._addUnit('heli', 'LAX', 'GUN');
   const inf = ids(g, 'GUN', 'LAX', 'inf')[0];
   skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 5;
   assert.ok(g.move([heli.id, inf], 'GUN', 'ODT').ok, 'GUN->LDT->LN->ODT is 3 spaces');
+  assert.equal(g.s.players.LAX.oil, 4, 'carried infantry burns no oil');
 });
 
 test('victory requires holding every inside territory for a full round', () => {
@@ -235,16 +254,21 @@ test('losing your City Hall defeats you and hands you the horde', () => {
   assert.ok(g.zombieMove([z], 'OE', 'ODT').ok);
 });
 
-test('spawn dice = round / 2 rounded up, each 6 makes one zombie at a rolled spawn point', () => {
+test('spawn: every outskirt rolls round/2 (rounded up) dice on its own; each 6 is a zombie there', () => {
   const g = newGame();
   assert.equal(g.spawnDiceCount(), 1);
   g.s.round = 5;
   assert.equal(g.spawnDiceCount(), 3);
   skipTo(g, 'zombieSpawn');
-  rig(g, [6, 3, 2, 6, 5]);
+  // outskirts in spawn order: NORTH, NORTH2, EAST, EAST2, SOUTH, SOUTH2 — 3 dice each
+  rig(g, [6, 3, 2, /*N2*/ 1, 1, 1, /*E*/ 6, 6, 1, /*E2*/ 2, 2, 2, /*S*/ 5, 5, 6, /*S2*/ 1, 2, 3]);
   g.endPhase();
-  assert.equal(g.zombiesAt('EAST').length, 1);
+  assert.equal(g.zombiesAt('NORTH').length, 1);
+  assert.equal(g.zombiesAt('NORTH2').length, 0);
+  assert.equal(g.zombiesAt('EAST').length, 2);
   assert.equal(g.zombiesAt('SOUTH').length, 1);
+  assert.equal(g.s.zombieReport.spawnDice.length, 6);
+  assert.deepEqual(g.s.zombieReport.spawnDice[2], { tid: 'EAST', rolls: [6, 6, 1], sixes: 2 });
 });
 
 test('state is plain JSON and round-trips', () => {
@@ -254,6 +278,30 @@ test('state is plain JSON and round-trips', () => {
   const h = Game.load(map, JSON.parse(json));
   assert.deepEqual(h.s.pending, ['inf']);
   assert.ok(h.endPhase().ok);
+});
+
+test('undo move takes back one move at a time (position, oil, captures)', () => {
+  const g = newGame();
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 3;
+  const inf = ids(g, 'LDT', 'LAX', 'inf')[0];
+  const tank = ids(g, 'LDT', 'LAX', 'tank')[0];
+  assert.equal(g.canUndoMove(), false);
+  assert.ok(g.move([inf], 'LDT', 'FI').ok);
+  assert.ok(g.move([tank], 'LDT', 'EAST').ok);
+  assert.equal(g.s.players.LAX.oil, 2);
+  assert.ok(g.undoMove().ok);
+  assert.equal(g.s.units[tank].at, 'LDT');
+  assert.equal(g.s.players.LAX.oil, 3);
+  assert.equal(g.owner('EAST'), null);
+  assert.equal(g.s.units[inf].at, 'FI', 'earlier move still stands');
+  assert.ok(g.undoMove().ok);
+  assert.equal(g.s.units[inf].at, 'LDT');
+  assert.equal(g.owner('FI'), null);
+  assert.equal(g.undoMove().ok, false, 'nothing left');
+  g.move([inf], 'LDT', 'FI');
+  g.endPhase();
+  assert.equal(g.canUndoMove(), false, 'moves lock in when the phase ends');
 });
 
 test('undo restores the phase start', () => {
