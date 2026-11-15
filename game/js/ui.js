@@ -270,8 +270,13 @@
       const tx = el('text', { x: CHIP_W - 1, y: 4.2, class: 'count' }, g);
       tx.textContent = n;
     }
+    if (opts.picked && opts.left != null && UNITS[type].move > 1) {
+      // movement pips: one dot per space left
+      const m = UNITS[type].move, gap = 4.2, x0 = CHIP_W / 2 - (m - 1) * gap / 2;
+      for (let i = 0; i < m; i++) el('circle', { cx: x0 + i * gap, cy: CHIP_H + 3.4, r: 1.6, class: i < opts.left ? 'pip on' : 'pip' }, g);
+    }
     const tt = el('title', {}, g);
-    tt.textContent = `${n} ${SIDE[owner].name} ${UNITS[type].name}` + (opts.picked ? ' (selected)' : '');
+    tt.textContent = `${n} ${SIDE[owner].name} ${UNITS[type].name}` + (opts.picked ? ' (selected' + (opts.left != null ? `, ${opts.left} space${opts.left === 1 ? '' : 's'} left` : '') + ')' : '');
     return g;
   }
   function chipOrigin(tid, nChips) {
@@ -297,14 +302,17 @@
       for (const [key, n] of Object.entries(by[tid])) {
         const [owner, type] = key.split(':');
         const picked = sel && sel.tid === tid && owner === moverSide ? Math.min(n, sel.pick[type] || 0) : 0;
-        if (picked) chips.push({ owner, type, n: picked, picked: true });
+        if (picked) {
+          const pu = pickedIds().map(id => game.s.units[id]).filter(u => u && u.type === type);
+          chips.push({ owner, type, n: picked, picked: true, left: pu.length ? Math.min(...pu.map(movesLeft)) : null });
+        }
         if (n - picked > 0) chips.push({ owner, type, n: n - picked, picked: false });
       }
       const anyPicked = chips.some(c => c.picked);
       chips.sort((a, b) => (b.picked - a.picked) || (order.indexOf(a.owner) - order.indexOf(b.owner)) || (typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type)));
       let [x, y] = chipOrigin(tid, chips.length);
       for (const c of chips) {
-        drawChip(layers.units, x, y, c.owner, c.type, c.n, { tid, picked: c.picked, dim: anyPicked && !c.picked && c.owner === moverSide });
+        drawChip(layers.units, x, y, c.owner, c.type, c.n, { tid, picked: c.picked, left: c.left, dim: anyPicked && !c.picked && c.owner === moverSide });
         x += CHIP_W + CHIP_GAP;
       }
     }
@@ -324,7 +332,16 @@
     const d = 'M' + pts.map(p => `${p[0]},${p[1]}`).join('L');
     el('path', { d, class: 'route-casing' }, layers.route);
     el('path', { d, class: 'route' }, layers.route);
-    for (const p of pts.slice(1, -1)) el('circle', { cx: p[0], cy: p[1], r: 3, class: 'route-stop' }, layers.route);
+    const me = game.s.current;
+    path.slice(1).forEach((id, i) => {
+      const [x, y] = game.T[id].label;
+      const blitz = game.s.phase === 'combatMove' && game.owner(id) !== me && !game.hostileTo(me, id) && pickedIds().some(uid => UNITS[game.s.units[uid].type].land);
+      if (blitz) {
+        el('circle', { cx: x, cy: y, r: 9, class: 'route-blitz' }, layers.route);
+        const t = el('text', { x, y: y - 12, class: 'route-tag' }, layers.route);
+        t.textContent = i < path.length - 2 ? 'blitz' : 'capture';
+      } else if (i < path.length - 2) el('circle', { cx: x, cy: y, r: 3, class: 'route-stop' }, layers.route);
+    });
   }
   // ------------------------------------------------------------ animation
   function positions() {
@@ -458,8 +475,8 @@
       case 'combatMove':
       case 'noncombatMove':
         h += `<h2>${game.phaseName()}</h2><p class="help">${s.phase === 'combatMove'
-          ? 'Click one of your territories, choose units, then click a highlighted destination. Moving into zombies or enemy units starts a battle. Moving into an empty territory captures it. Land units can only leave or enter the city through a highway gate (gold wall piece) or a breach. Units that stay put can fire from the wall.'
-          : 'Units that did not move or fight may move into friendly territory. Aircraft that flew must end on a landing site (Airport; Gundersen for the helicopter), or they crash.'}</p>`;
+          ? 'Aircraft can only fly where they can still get back to base with the movement they have left. Click one of your territories, choose units, then click a highlighted destination. Moving into zombies or enemy units starts a battle. Moving into an empty territory captures it. Land units can only leave or enter the city through a highway gate (gold wall piece) or a breach. Units that stay put can fire from the wall.'
+          : 'Units that did not move or fight may move into friendly territory. Aircraft must land back at the Airport (the helicopter may also use Gundersen) before you can end the turn.'}</p>`;
         h += moveCard();
         break;
       case 'combat':
@@ -512,7 +529,8 @@
   }
   function pickedIds() {
     if (!sel) return [];
-    const mov = movableUnits(sel.tid);
+    const pref = new Set(sel.prefer || []);
+    const mov = movableUnits(sel.tid).sort((a, b) => pref.has(b.id) - pref.has(a.id));
     const out = [];
     for (const type in sel.pick) out.push(...mov.filter(u => u.type === type).slice(0, sel.pick[type]).map(u => u.id));
     return out;
@@ -528,6 +546,20 @@
       reach = game.reachable(ids, sel.tid);
     }
   }
+  function movesLeft(u) { return Math.max(0, UNITS[u.type].move - (u.moved || 0)); }
+  /** Spaces from the selected territory to the nearest landing site for an aircraft type. */
+  function landingNote(type, left) {
+    const p = game.s.current;
+    const sites = game.landingSites(p, type);
+    if (!sites.length) return `<br><small class="warn">No base to land at!</small>`;
+    const dist = { [sel.tid]: 0 };
+    const q = [sel.tid];
+    while (q.length) { const c = q.shift(); for (const n of game.adj[c]) if (!(n in dist)) { dist[n] = dist[c] + 1; q.push(n); } }
+    const best = sites.reduce((a, b) => (dist[b] < dist[a] ? b : a));
+    const d = dist[best];
+    const ok = d <= left;
+    return `<br><small class="${ok ? 'help' : 'warn'}">Nearest landing (${type === 'heli' ? 'Airport or Gundersen' : 'Airport'}): ${escapeHtml(game.T[best].short || game.T[best].name)}, ${d === 0 ? 'here' : d + ' space' + (d === 1 ? '' : 's') + ' away'}${ok ? '' : ': it cannot make it back this turn'}</small>`;
+  }
   function moveCard() {
     if (!sel) return '<p class="help"><i>No territory selected.</i></p>';
     const mov = movableUnits(sel.tid);
@@ -536,10 +568,13 @@
     let h = `<div class="card active"><h3>Move from ${escapeHtml(tname(sel.tid))}</h3>`;
     for (const type in c) {
       const n = sel.pick[type] || 0;
-      h += `<div class="row"><span class="name">${UNITS[type].name} <small>(${c[type]} can move)</small></span>
+      const lefts = [...new Set(mov.filter(u => u.type === type).map(u => movesLeft(u)))].sort((a, b) => b - a);
+      const leftTxt = `${lefts.join(' / ')} of ${UNITS[type].move} space${UNITS[type].move === 1 ? '' : 's'} left`;
+      h += `<div class="row"><span class="name">${UNITS[type].name} <small>(${c[type]} can move · ${leftTxt})</small>${UNITS[type].air ? landingNote(type, Math.min(...lefts)) : ''}</span>
         <span class="stepper"><button data-pick="${type}" data-d="-1">−</button><output>${n}</output><button data-pick="${type}" data-d="1">+</button></span></div>`;
     }
     h += `<p class="help">${!pickedCount() ? 'No units picked.' : reach.length ? 'Click a bright territory to move there (hover to see the route).' : 'No legal destination for this selection.'}</p>`;
+    if (game.s.phase === 'combatMove' && mov.some(u => u.type === 'tank')) h += `<p class="help"><b>Tanks</b> move up to 2 spaces, one step at a time if you like: step into an empty enemy or unowned territory to blitz (capture) it and keep going. Moving into enemy units or zombies ends the tank's move. A two-space click routes through your own land when it can.</p>`;
     h += `<p class="help controls">Click: pick 1 · click again or click an icon: +1 · <b>double-click</b> or Shift-click: all · Ctrl-click an icon: all of that type · right-click: put 1 back · Esc: clear</p>`;
     if (game.s.phase === 'zombieMove') {
       const walls = [...game.adj[sel.tid]].filter(n => game.wallIntact(sel.tid, n));
@@ -633,6 +668,12 @@
     let h = `<div class="card"><h3>${escapeHtml(t.name)}</h3><div class="help">${t.inside ? 'Inside the wall' : 'Outside the wall'}${t.region ? ' · ' + t.region : ''} · ${valueText(t) || 'no income'}${o ? ' · owned by ' + SIDE[o].name : ' · unowned'}</div>`;
     if (t.desc) h += `<div class="help">${escapeHtml(t.desc)}</div>`;
     for (const k in byOwner) h += `<div><b>${SIDE[k].name}</b>: ${countsText(byOwner[k])}</div>`;
+    const mine = (byOwner[game.s.current] || []).filter(u => UNITS[u.type].move > 1);
+    if (mine.length && !game.isZombieTurn()) {
+      const parts = {};
+      for (const u of mine) { const k = `${UNITS[u.type].name}: ${movesLeft(u)}/${UNITS[u.type].move}`; parts[k] = (parts[k] || 0) + 1; }
+      h += `<div class="help">Spaces left this turn: ${Object.entries(parts).map(([k, n]) => (n > 1 ? n + '× ' : '') + k).join(', ')}</div>`;
+    }
     const walls = MAP.walls.filter(w => w.inside === tid || w.outside === tid);
     if (walls.length) h += `<div class="help">Walls: ${walls.map(w => `W${w.no} ${escapeHtml(tname(w.inside === tid ? w.outside : w.inside))} ${game.s.walls[w.id] ? (w.gate ? '(intact, <b>gate</b>)' : '(intact)') : '(<b style="color:var(--lax)">breached</b>)'}`).join(', ')}</div>`;
     return h + '</div>';
@@ -752,6 +793,12 @@
       lastClick = null;
       if (!res.ok) { act(res); return; }
       sel = null; reach = []; hoverTid = null; errMsg = '';
+      // tanks with a space left stay picked so the next step (e.g. a blitz) is one click away
+      const still = ids.map(id => game.s.units[id]).filter(u => u && u.at === tid && game.unitCanMove(u));
+      if (still.length && game.s.phase !== 'zombieMove') {
+        sel = { tid, pick: game.countBy(still), lastType: still[0].type, prefer: still.map(u => u.id) };
+        computeReach();
+      }
       save();
       if (stepDelay() > 0) animateMoves(diffMoves(before), Math.min(450, stepDelay() * 0.6)).then(render);
       else render();

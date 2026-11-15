@@ -58,6 +58,12 @@
   };
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  /** Seed for a new game: the system's secure random source when available. */
+  function randomSeed() {
+    const c = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined;
+    if (c && c.getRandomValues) return c.getRandomValues(new Uint32Array(1))[0] | 0;
+    return Math.floor(Math.random() * 2147483647);
+  }
   function enemyOf(p) { return p === 'LAX' ? 'ONA' : 'LAX'; }
 
   class Game {
@@ -81,7 +87,7 @@
     // ------------------------------------------------------------------ setup
     static newGame(map, opts = {}) {
       const rules = Object.assign({}, DEFAULT_RULES, opts.rules || {});
-      const seed = opts.seed != null ? opts.seed : Math.floor(Math.random() * 2147483647);
+      const seed = opts.seed != null ? opts.seed : randomSeed();
       const s = {
         version: 1,
         rules,
@@ -189,7 +195,30 @@
     special(tag) { return this.map.territories.filter(t => (t.special || []).includes(tag)).map(t => t.id); }
     cityHall(p) { return this.map.cityHalls[p]; }
     airportControlled(p) { return this.special('airport').some(t => this.controls(p, t)); }
+    /**
+     * Where an aircraft may end the turn: its base (the Airport; Gundersen too for the
+     * helicopter), and only if that base was yours at the START of the turn (A&A: never land
+     * where you captured this turn).
+     */
     landingSites(p, type) {
+      const start = this.s.startFriendly && this.s.current === p ? new Set(this.s.startFriendly) : null;
+      return this.airBases(p, type).filter(t => !start || start.has(t));
+    }
+    /** Fewest spaces an aircraft needs from `from` to reach a landing site (air ignores terrain). */
+    airDistanceToLanding(p, type, from) {
+      const sites = new Set(this.landingSites(p, type));
+      if (!sites.size) return Infinity;
+      const dist = { [from]: 0 };
+      const q = [from];
+      while (q.length) {
+        const c = q.shift();
+        if (sites.has(c)) return dist[c];
+        for (const n of this.adj[c]) if (!(n in dist)) { dist[n] = dist[c] + 1; q.push(n); }
+      }
+      return Infinity;
+    }
+    /** Where new aircraft are placed: the Airport (and Gundersen for the helicopter). */
+    airBases(p, type) {
       const tags = UNITS[type].landsAt || [];
       const out = [];
       for (const tag of tags) for (const t of this.special(tag)) {
@@ -308,7 +337,9 @@
         if (!this.airportControlled(p)) return false; // grounded
         return u.moved < def.move;
       }
-      if (u.moved > 0) return false;
+      // land units may move in steps (a tank: 1 space, then another) until their movement is used;
+      // entering a battle (enemy units or zombies) ends their move
+      if (u.moved >= def.move) return false;
       if (this.s.phase === 'noncombatMove' && u.combatMoved) return false;
       if (this.s.phase === 'combatMove' && this.hostileTo(p, u.at)) return false;
       return true;
@@ -337,14 +368,20 @@
       const g = this._group(units);
       if (!(g.range > 0) || from === to) return null;
       const combat = this.s.phase === 'combatMove';
+      const startFriendly = new Set(this.s.startFriendly || []);
       const destOk = (tid) => {
+        // A&A: in combat move every move must lead to combat or a capture. Friendly land is only a
+        // waypoint for a tank that still has a space left to go on.
+        if (combat && !this.hostileTo(p, tid) && this.owner(tid) === p && startFriendly.has(tid)) {
+          if (g.flying) return false;
+          const cost = dist[tid];
+          if (g.land.some(u => UNITS[u.type].move - u.moved - cost < 1)) return false;
+        }
         if (!combat && this.hostileTo(p, tid)) return false;
         if (!combat && !g.flying && this.owner(tid) !== p) return false;
         if (!combat && g.flying && g.cargo.length && this.owner(tid) !== p) return false;
-        if (!combat && g.flying && !g.cargo.length) {
-          // air may end noncombat anywhere friendly (it must still reach a landing site)
-          if (this.owner(tid) !== p) return false;
-        }
+        // aircraft must finish noncombat move on a landing site
+        if (!combat && g.air.some(u => !this.landingSites(p, u.type).includes(tid))) return false;
         return true;
       };
       const passOk = (tid) => {
@@ -355,29 +392,44 @@
         if (combat && this.owner(tid) !== p && g.land.some(u => u.type !== 'tank')) return false;
         return true;
       };
-      const prev = { [from]: null };
+      // breadth-first distances over legal steps
+      const canStep = (a, b) => g.flying || this.landCanCross(a, b);
+      const expandable = (tid) => tid === from || passOk(tid);
+      const dist = { [from]: 0 };
       let frontier = [from];
       for (let step = 1; step <= g.range && frontier.length; step++) {
         const next = [];
         for (const cur of frontier) {
-          if (cur !== from && !passOk(cur)) continue;
+          if (!expandable(cur)) continue;
           for (const n of this.adj[cur]) {
-            if (n in prev) continue;
-            if (!g.flying && !this.landCanCross(cur, n)) continue;
-            prev[n] = cur;
-            if (n === to) {
-              if (!destOk(n)) { delete prev[n]; continue; }
-              const path = [n];
-              let c = cur;
-              while (c !== null) { path.unshift(c); c = prev[c]; }
-              return { path, cost: path.length - 1 };
-            }
+            if (n in dist || !canStep(cur, n)) continue;
+            dist[n] = step;
             next.push(n);
           }
         }
         frontier = next;
       }
-      return null;
+      if (!(to in dist) || !destOk(to)) return null;
+      // walk back, preferring your own territory: nothing is blitzed unless it has to be
+      // (to blitz a particular territory, move one step at a time)
+      const rank = (tid) => (tid === from ? 0 : this.owner(tid) === p ? 1 : 2);
+      const path = [to];
+      let cur = to;
+      while (cur !== from) {
+        const cands = [...this.adj[cur]].filter(c => dist[c] === dist[cur] - 1 && expandable(c) && canStep(c, cur));
+        cands.sort((a, b) => rank(a) - rank(b));
+        cur = cands[0];
+        path.unshift(cur);
+      }
+      const cost = path.length - 1;
+      // A&A: an aircraft may only fly into combat if it can still get back to a landing site
+      if (combat) {
+        for (const u of g.air) {
+          const left = UNITS[u.type].move - u.moved - cost;
+          if (this.airDistanceToLanding(p, u.type, to) > left) return null;
+        }
+      }
+      return { path, cost };
     }
 
     reachable(unitIds, from) {
@@ -412,20 +464,24 @@
           if (this.owner(tid) !== p) {
             this.s.territories[tid].owner = p;
             this.log(`${SIDE[p].name} tanks blitz through ${this.T[tid].name}.`);
+            this._onCapture(tid, p);
           }
         }
       }
       for (const u of fuelers) { u.oilPaid = true; this.s.players[p].oil -= UNITS[u.type].oil; }
       for (const u of units) {
         if (UNITS[u.type].air) u.moved += path.cost;
-        else u.moved = UNITS[u.type].move; // land units finish moving
-        if (this.s.phase === 'combatMove') { u.combatMoved = true; u.origin = from; }
+        else if (g.cargo.includes(u)) u.moved = UNITS[u.type].move; // dropped off by the helicopter
+        else u.moved += path.cost;
+        // A&A retreat: units fall back to the adjacent space they entered from (the last step of the path)
+        if (this.s.phase === 'combatMove') { u.combatMoved = true; u.origin = path.path[path.path.length - 2]; }
         u.at = to;
       }
       // capture an empty destination in combat move
       if (this.s.phase === 'combatMove' && !this.hostileTo(p, to) && g.land.length && this.owner(to) !== p) {
         this.s.territories[to].owner = p;
         this.log(`${SIDE[p].name} takes ${this.T[to].name}.`);
+        this._onCapture(to, p);
       }
       const c = this.countBy(units);
       this.log(`${SIDE[p].name} moves ${describe(c)} ${this.T[from].name} → ${this.T[to].name}.`);
@@ -622,6 +678,17 @@
       return b.last;
     }
 
+    /** A&A: capturing the enemy capital (City Hall) seizes its unspent treasury. */
+    _onCapture(tid, p) {
+      const e = enemyOf(p);
+      if (tid !== this.cityHall(e) || this.s.players[e].defeated) return;
+      const loot = this.s.players[e].sp;
+      if (!loot) return;
+      this.s.players[e].sp = 0;
+      this.s.players[p].sp += loot;
+      this.log(`${SIDE[p].name} seizes ${loot} SP from the ${SIDE[e].name} treasury at ${this.T[tid].name}!`, 'win');
+    }
+
     _zombify(tid, casualties, owner) {
       const n = casualties.filter(t => UNITS[t] && UNITS[t].land && t !== 'zombie').length;
       for (let i = 0; i < n; i++) this._addUnit('zombie', Z, tid);
@@ -645,6 +712,7 @@
         } else if (aA && attAlive.some(u => UNITS[u.type].land)) {
           this.s.territories[b.tid].owner = b.attacker;
           this.log(`${SIDE[b.attacker].name} wins at ${name} and takes control.`, 'combat');
+          this._onCapture(b.tid, b.attacker);
         } else if (aA) {
           this.log(`${SIDE[b.attacker].name} clears ${name} from the air (no land units to occupy it).`, 'combat');
         } else {
@@ -663,8 +731,9 @@
       const p = this.s.current;
       const b = this.s.battles.find(x => x.tid === tid && !x.done);
       if (!b || b.attacker !== p || b.round < 1 || b.pending) return [];
-      const origins = new Set(this.unitsAt(tid, p).map(u => u.origin).filter(Boolean));
-      return [...origins].filter(t => !this.hostileTo(p, t) && this.owner(t) === p);
+      // A&A: one ADJACENT friendly territory that at least one attacking land unit moved in from
+      const origins = new Set(this.unitsAt(tid, p).filter(u => !UNITS[u.type].air).map(u => u.origin).filter(Boolean));
+      return [...origins].filter(t => this.adj[tid].has(t) && !this.hostileTo(p, t) && this.owner(t) === p);
     }
 
     retreat(tid, to) {
@@ -672,7 +741,8 @@
       const b = this.s.battles.find(x => x.tid === tid && !x.done);
       if (!b) return fail('No battle there.');
       if (!this.retreatOptions(tid).includes(to)) return fail('Cannot retreat there.');
-      for (const u of this.unitsAt(tid, p)) u.at = to;
+      // land units fall back together; aircraft stay over the battlefield and fly home in noncombat
+      for (const u of this.unitsAt(tid, p)) if (!UNITS[u.type].air) u.at = to;
       b.done = true;
       b.result = 'retreat';
       this.log(`${SIDE[p].name} retreats from ${this.T[tid].name} to ${this.T[to].name}.`, 'combat');
@@ -685,9 +755,25 @@
     canEndPhase() {
       const s = this.s;
       if (s.winner) return fail('The game is over.');
+      if (s.phase === 'combatMove') {
+        const start = new Set(s.startFriendly || []);
+        const parked = Object.values(s.units).filter(u => u.owner === s.current && u.combatMoved &&
+          !this.hostileTo(s.current, u.at) && start.has(u.at) && this.owner(u.at) === s.current);
+        if (parked.length) {
+          const where = [...new Set(parked.map(u => this.T[u.at].name))];
+          return fail(`Combat moves must end in battle or a capture. Move on (or undo) the units in ${where.join(', ')}; reposition in Noncombat Move.`);
+        }
+      }
       if (s.phase === 'combat') {
         const open = s.battles.filter(b => !b.done);
         if (open.length) return fail(`Resolve every battle first: ${open.map(b => this.T[b.tid].name).join(', ')}.`);
+      }
+      if (s.phase === 'noncombatMove') {
+        const p = s.current;
+        const unlanded = Object.values(s.units).filter(u => u.owner === p && UNITS[u.type].air && u.moved > 0 &&
+          !this.landingSites(p, u.type).includes(u.at) &&
+          this.landingSites(p, u.type).some(site => this.findPath([u.id], u.at, site)));
+        if (unlanded.length) return fail(`Land your aircraft first: ${unlanded.map(u => `${UNITS[u.type].name} in ${this.T[u.at].name}`).join(', ')}.`);
       }
       return ok();
     }
@@ -744,6 +830,8 @@
       for (const u of Object.values(s.units)) {
         if (u.owner === p) { u.moved = 0; u.combatMoved = false; u.oilPaid = false; u.origin = null; }
       }
+      // territories friendly at the start of the turn: the only places aircraft may land
+      s.startFriendly = this.map.territories.map(t => t.id).filter(t => this.controls(p, t));
       const pl = s.players[p];
       if (pl.holding) {
         if (this.meetsVictory(p)) {
@@ -766,7 +854,7 @@
       for (const u of Object.values(s.units)) {
         if (u.owner !== p || !UNITS[u.type].air || u.moved === 0) continue;
         if (!this.landingSites(p, u.type).includes(u.at)) {
-          this.log(`${UNITS[u.type].name} could not reach a landing site and crashed.`, 'combat');
+          this.log(`${UNITS[u.type].name} could not land and crashed.`, 'combat');
           this._removeUnit(u.id);
         }
       }
@@ -776,7 +864,7 @@
         const def = UNITS[type];
         let where = null;
         if (def.air) {
-          const sites = this.landingSites(p, type);
+          const sites = this.airBases(p, type);
           where = (type === 'heli' && sites.find(t => (this.T[t].special || []).includes('gundersen'))) || sites[0] || null;
         } else if (this.controls(p, this.cityHall(p))) {
           where = this.cityHall(p);

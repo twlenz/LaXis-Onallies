@@ -80,7 +80,7 @@ A **round** is:
 Each player turn has these phases, in order (as in Axis & Allies):
 
 1. **Purchase units**: spend SP. Purchased units wait off-board.
-2. **Combat move**: move units into hostile territories (enemy units or zombies) and into empty territories you want to capture.
+2. **Combat move**: move units into hostile territories (enemy units or zombies) and into empty territories you want to capture. As in Axis & Allies, **every combat move must end in a battle or a capture**: you can't park units in your own territory now (do that in Noncombat Move). A tank may pass through your own territory on the way.
 3. **Conduct combat**: first **wall fire** (§7), then resolve each battle.
 4. **Noncombat move**: units that did not move or fight this turn may move into friendly territory. Aircraft must land.
 5. **Mobilize** new units.
@@ -107,14 +107,19 @@ Combat uses the Axis & Allies system: a unit **hits on a d6 roll equal to or bel
 - Units without oil stay put. They still defend, and tanks can still fire from the wall.
 - At **Collect Income**, gain **1 oil for each Kwik Trip** in territories you control.
 
-### Blitzing
-During combat move, a tank may move through an **empty** unowned or enemy territory and keep going. It captures that territory on the way.
+### Tank movement and blitzing
+- A tank moves up to **2 spaces**. It may take them as **separate steps** in the same move phase: move one space, do other things, then move it one more.
+- **Blitzing:** during combat move, a tank that enters an **empty** unowned or enemy territory captures it and may keep going.
+- Entering a territory with **enemy units or zombies** starts a battle and **ends the tank's move**.
+- A tank that moved during combat move cannot move again in noncombat move, as in Axis & Allies.
 
 ### Aircraft and the Airport
 - You can **buy** your aircraft only while you **control the Airport**. Each side may have **at most one** aircraft at a time; if yours is destroyed, you may buy another.
 - You can **fly** your aircraft only while you control the Airport. If you lose the Airport, your aircraft is **grounded**: it cannot move, but it still defends.
 - New aircraft are placed at their landing site (the helicopter goes to Gundersen if you control it, otherwise to the Airport).
-- At the end of your Noncombat Move, any aircraft that moved this turn and is **not on a landing site you control is destroyed** (it crashed). Landing sites are the **Airport** for both aircraft, plus **Gundersen** for the helicopter.
+- **Landing sites:** the **Airport** for both aircraft, plus **Gundersen** for the helicopter. A landing site must have been yours **at the start of your turn**, so you can't land at an Airport you captured this turn.
+- **Plan the trip home:** in combat move, an aircraft may only fly somewhere it can still get back to a landing site with the movement it has left (Axis & Allies rule).
+- **Land before you finish:** you can't end Noncombat Move while an aircraft that flew this turn is off its landing site and could still reach one. If it truly cannot reach one (for example, it was stranded by a lost battle), it crashes when your turn ends.
 - Aircraft cannot capture territory. Aircraft may fly over anything, including water, enemies and zombies.
 - **Helicopter transport:** the helicopter may carry **one infantry** that has not moved this turn. Both move together using the helicopter's movement, and the infantry is dropped where the helicopter ends.
 
@@ -143,8 +148,9 @@ At the start of **Conduct Combat**, each inside territory that you own and that 
 Standard Axis & Allies land combat:
 1. Attacker rolls for every attacking unit; defender rolls for every defending unit.
 2. Each side removes casualties equal to the hits scored. Each owner chooses which of their own units die (default: cheapest first).
-3. The attacker may **retreat** after any round. All surviving attackers move together to **one** friendly territory from which attacking units came.
+3. The attacker may **retreat** after any round. All surviving attacking **land** units move together to **one adjacent friendly territory** that at least one of them **entered the battle from** (for a tank that drove two spaces, that's the space it passed through last, not where it started). Attacking **aircraft stay** over the battlefield and fly home in Noncombat Move.
 4. Continue until one side is gone or the attacker retreats. If attacking land units survive, the attacker takes control.
+5. **Capturing the enemy City Hall** also seizes all of the enemy's **unspent SP** (as capturing a capital does in Axis & Allies).
 
 Casualties in player-vs-player fights are simply removed. They **do not** become zombies.
 

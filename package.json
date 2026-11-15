@@ -4,7 +4,7 @@
   "private": true,
   "description": "LaXis & OnAllies: an area-control zombie board game set in La Crosse and Onalaska, WI",
   "scripts": {
-    "test": "node --test tests/engine.test.js tests/map.test.js",
+    "test": "node --test tests/engine.test.js tests/map.test.js tests/dice.test.js",
     "fetch:map": "python3 tools/fetch_osm.py",
     "build:map": "python3 tools/build_map.py",
     "build:print": "node tools/build_print.js",
