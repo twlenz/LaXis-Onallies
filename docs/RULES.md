@@ -158,6 +158,7 @@ During the zombie turn, zombies that enter a territory with player units attack 
 - **If the zombies win** (all your units there are destroyed), every land unit you lost **rises as a zombie** in that territory.
 - **If you hold**, your casualties stay dead.
 - Aircraft that are destroyed are simply removed. They never rise.
+- *Digital version:* in zombie-turn battles, the game removes your cheapest units first for you. In your own battles, both sides pick their losses after every roll.
 
 ## 9. The zombie turn
 

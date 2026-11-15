@@ -145,4 +145,19 @@ label.opt { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
   #mapwrap { min-height: 52vh; }
   header { padding: 6px 16px; }
 }
-.layer-borders, .layer-doodles, .layer-gates, .layer-units, .layer-labels, .layer-kt, .layer-walls, .layer-arrows, .layer-roads, .layer-water, .layer-zom { pointer-events: none; }
+.layer-borders, .layer-doodles, .layer-gates, .layer-route, .layer-labels, .layer-kt, .layer-walls, .layer-arrows, .layer-roads, .layer-water, .layer-zom { pointer-events: none; }
+
+/* unit tokens are clickable (TripleA-style picking) */
+.unitchip { cursor: pointer; }
+.unitchip.flying { pointer-events: none; }
+.unitchip.picked { filter: drop-shadow(0 5px 3px rgba(0,0,0,.55)); }
+.unitchip.picked > rect { stroke: #ffd54a; stroke-width: 2.2; }
+.unitchip.dim { opacity: .42; }
+.route-casing { fill: none; stroke: #fffaf0; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+.route { fill: none; stroke: #2b2117; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 4; marker-end: url(#routehead); }
+.route-stop { fill: #2b2117; stroke: #fffaf0; stroke-width: 1.2; }
+.help.controls { font-size: 12px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.cpu-lock .caspick button { pointer-events: auto; opacity: 1; }
+.caspick { border-color: var(--accent); }
+.caspick h3 { margin-bottom: 6px; }
+#endBtn:disabled { filter: grayscale(1); }

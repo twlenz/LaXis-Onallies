@@ -19,6 +19,20 @@ An area-control war game set in **La Crosse** and **Onalaska, Wisconsin**. La Cr
 | `rulebook.pdf` | The full rules ([HTML](docs/rules.html), [Markdown](docs/RULES.md)) |
 | `board.svg` | Vector board for editing |
 
+### Digital controls (modelled on TripleA)
+
+| Action | Effect |
+|---|---|
+| Click a territory | Pick 1 unit to move (click again or click a unit icon: +1) |
+| Double-click or Shift-click | Pick every unit there that can move |
+| Ctrl-click a unit icon | Pick all units of that type |
+| Right-click | Put 1 unit back (Shift-right-click or Esc clears) |
+| Hover a bright territory | Preview the route |
+| Click a bright territory | Move the picked units there |
+| ↶ Undo move / Reset phase | Take back the last move / the whole phase |
+| Battles | Roll a round, then each side picks its own casualties (pre-filled cheapest-first). "Fight to the end" auto-picks. The next-phase button stays grey until every battle is resolved. |
+| Drag, scroll wheel, +/− | Pan and zoom |
+
 ## The game in one minute
 
 - **The board:** 16 La Crosse neighborhoods, 12 Onalaska neighborhoods and 2 territories on French Island sit inside a wall. Three rings of territories surround them to the north, east and south, including Holmen, Midway, Medary, Shelby and Barre Mills. A three-territory spoke runs west across the Cass Street bridge: Pettibone, La Crescent and the Minnesota Bluffs.
