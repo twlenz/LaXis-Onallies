@@ -58,6 +58,12 @@
   };
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  /** Seed for a new game: the system's secure random source when available. */
+  function randomSeed() {
+    const c = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined;
+    if (c && c.getRandomValues) return c.getRandomValues(new Uint32Array(1))[0] | 0;
+    return Math.floor(Math.random() * 2147483647);
+  }
   function enemyOf(p) { return p === 'LAX' ? 'ONA' : 'LAX'; }
 
   class Game {
@@ -81,7 +87,7 @@
     // ------------------------------------------------------------------ setup
     static newGame(map, opts = {}) {
       const rules = Object.assign({}, DEFAULT_RULES, opts.rules || {});
-      const seed = opts.seed != null ? opts.seed : Math.floor(Math.random() * 2147483647);
+      const seed = opts.seed != null ? opts.seed : randomSeed();
       const s = {
         version: 1,
         rules,
@@ -362,7 +368,15 @@
       const g = this._group(units);
       if (!(g.range > 0) || from === to) return null;
       const combat = this.s.phase === 'combatMove';
+      const startFriendly = new Set(this.s.startFriendly || []);
       const destOk = (tid) => {
+        // A&A: in combat move every move must lead to combat or a capture. Friendly land is only a
+        // waypoint for a tank that still has a space left to go on.
+        if (combat && !this.hostileTo(p, tid) && this.owner(tid) === p && startFriendly.has(tid)) {
+          if (g.flying) return false;
+          const cost = dist[tid];
+          if (g.land.some(u => UNITS[u.type].move - u.moved - cost < 1)) return false;
+        }
         if (!combat && this.hostileTo(p, tid)) return false;
         if (!combat && !g.flying && this.owner(tid) !== p) return false;
         if (!combat && g.flying && g.cargo.length && this.owner(tid) !== p) return false;
@@ -450,6 +464,7 @@
           if (this.owner(tid) !== p) {
             this.s.territories[tid].owner = p;
             this.log(`${SIDE[p].name} tanks blitz through ${this.T[tid].name}.`);
+            this._onCapture(tid, p);
           }
         }
       }
@@ -458,13 +473,15 @@
         if (UNITS[u.type].air) u.moved += path.cost;
         else if (g.cargo.includes(u)) u.moved = UNITS[u.type].move; // dropped off by the helicopter
         else u.moved += path.cost;
-        if (this.s.phase === 'combatMove') { u.combatMoved = true; u.origin = from; }
+        // A&A retreat: units fall back to the adjacent space they entered from (the last step of the path)
+        if (this.s.phase === 'combatMove') { u.combatMoved = true; u.origin = path.path[path.path.length - 2]; }
         u.at = to;
       }
       // capture an empty destination in combat move
       if (this.s.phase === 'combatMove' && !this.hostileTo(p, to) && g.land.length && this.owner(to) !== p) {
         this.s.territories[to].owner = p;
         this.log(`${SIDE[p].name} takes ${this.T[to].name}.`);
+        this._onCapture(to, p);
       }
       const c = this.countBy(units);
       this.log(`${SIDE[p].name} moves ${describe(c)} ${this.T[from].name} → ${this.T[to].name}.`);
@@ -661,6 +678,17 @@
       return b.last;
     }
 
+    /** A&A: capturing the enemy capital (City Hall) seizes its unspent treasury. */
+    _onCapture(tid, p) {
+      const e = enemyOf(p);
+      if (tid !== this.cityHall(e) || this.s.players[e].defeated) return;
+      const loot = this.s.players[e].sp;
+      if (!loot) return;
+      this.s.players[e].sp = 0;
+      this.s.players[p].sp += loot;
+      this.log(`${SIDE[p].name} seizes ${loot} SP from the ${SIDE[e].name} treasury at ${this.T[tid].name}!`, 'win');
+    }
+
     _zombify(tid, casualties, owner) {
       const n = casualties.filter(t => UNITS[t] && UNITS[t].land && t !== 'zombie').length;
       for (let i = 0; i < n; i++) this._addUnit('zombie', Z, tid);
@@ -684,6 +712,7 @@
         } else if (aA && attAlive.some(u => UNITS[u.type].land)) {
           this.s.territories[b.tid].owner = b.attacker;
           this.log(`${SIDE[b.attacker].name} wins at ${name} and takes control.`, 'combat');
+          this._onCapture(b.tid, b.attacker);
         } else if (aA) {
           this.log(`${SIDE[b.attacker].name} clears ${name} from the air (no land units to occupy it).`, 'combat');
         } else {
@@ -702,8 +731,9 @@
       const p = this.s.current;
       const b = this.s.battles.find(x => x.tid === tid && !x.done);
       if (!b || b.attacker !== p || b.round < 1 || b.pending) return [];
-      const origins = new Set(this.unitsAt(tid, p).map(u => u.origin).filter(Boolean));
-      return [...origins].filter(t => !this.hostileTo(p, t) && this.owner(t) === p);
+      // A&A: one ADJACENT friendly territory that at least one attacking land unit moved in from
+      const origins = new Set(this.unitsAt(tid, p).filter(u => !UNITS[u.type].air).map(u => u.origin).filter(Boolean));
+      return [...origins].filter(t => this.adj[tid].has(t) && !this.hostileTo(p, t) && this.owner(t) === p);
     }
 
     retreat(tid, to) {
@@ -711,7 +741,8 @@
       const b = this.s.battles.find(x => x.tid === tid && !x.done);
       if (!b) return fail('No battle there.');
       if (!this.retreatOptions(tid).includes(to)) return fail('Cannot retreat there.');
-      for (const u of this.unitsAt(tid, p)) u.at = to;
+      // land units fall back together; aircraft stay over the battlefield and fly home in noncombat
+      for (const u of this.unitsAt(tid, p)) if (!UNITS[u.type].air) u.at = to;
       b.done = true;
       b.result = 'retreat';
       this.log(`${SIDE[p].name} retreats from ${this.T[tid].name} to ${this.T[to].name}.`, 'combat');
@@ -724,6 +755,15 @@
     canEndPhase() {
       const s = this.s;
       if (s.winner) return fail('The game is over.');
+      if (s.phase === 'combatMove') {
+        const start = new Set(s.startFriendly || []);
+        const parked = Object.values(s.units).filter(u => u.owner === s.current && u.combatMoved &&
+          !this.hostileTo(s.current, u.at) && start.has(u.at) && this.owner(u.at) === s.current);
+        if (parked.length) {
+          const where = [...new Set(parked.map(u => this.T[u.at].name))];
+          return fail(`Combat moves must end in battle or a capture. Move on (or undo) the units in ${where.join(', ')}; reposition in Noncombat Move.`);
+        }
+      }
       if (s.phase === 'combat') {
         const open = s.battles.filter(b => !b.done);
         if (open.length) return fail(`Resolve every battle first: ${open.map(b => this.T[b.tid].name).join(', ')}.`);

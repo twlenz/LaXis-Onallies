@@ -70,7 +70,7 @@ test('tanks move a space at a time: blitz on, stop when they hit a battle', () =
   assert.equal(g.unitCanMove(g.s.units[tank]), false, 'movement used up, and it is in a battle');
   // infantry still move once
   const [inf] = ids(g, 'LDT', 'LAX', 'inf');
-  assert.ok(g.move([inf], 'LDT', 'LN').ok);
+  assert.ok(g.move([inf], 'LDT', 'FI').ok, 'into land captured this turn');
   assert.equal(g.unitCanMove(g.s.units[inf]), false);
 });
 
@@ -99,16 +99,21 @@ test('a two-space move goes through your own territory unless you step through e
 test('aircraft fly into combat only if they can still get back to base', () => {
   const g = newGame();
   g.s.territories.FI.owner = 'LAX';
+  for (const u of g.unitsAt('LN', 'LAX')) g._removeUnit(u.id);
+  g._addUnit('zombie', 'Z', 'LN');
+  g._addUnit('zombie', 'Z', 'SOUTH');
   g._startPlayerTurn('LAX'); // re-record start-of-turn territories (airport now La Crosse's)
   const heli = g._addUnit('heli', 'LAX', 'GUN');
   skipTo(g, 'combatMove');
   g.s.players.LAX.oil = 5;
-  // GUN-LDT-LN-EAST is 3 spaces: nothing left to fly home -> not allowed
-  assert.equal(g.findPath([heli.id], 'GUN', 'EAST'), null);
-  // LN is 2 out, both bases are 2 back, only 1 space left -> not allowed
+  // ODT is 3 spaces out: nothing left to fly home -> not allowed
+  assert.equal(g.findPath([heli.id], 'GUN', 'ODT'), null);
+  // zombies in LN are 2 out; both bases are 2 back with only 1 space left -> not allowed
   assert.equal(g.findPath([heli.id], 'GUN', 'LN'), null);
-  // LDT is 1 out, Gundersen 1 back -> allowed
-  assert.ok(g.findPath([heli.id], 'GUN', 'LDT'));
+  // zombies in SOUTH are 1 out, Gundersen 1 back -> allowed
+  assert.ok(g.findPath([heli.id], 'GUN', 'SOUTH'));
+  // and a friendly territory is never a combat-move destination for aircraft
+  assert.equal(g.findPath([heli.id], 'GUN', 'LDT'), null);
 });
 
 test('aircraft land only at their base, and noncombat cannot end until they have', () => {
@@ -118,13 +123,13 @@ test('aircraft land only at their base, and noncombat cannot end until they have
   const heli = g._addUnit('heli', 'LAX', 'GUN');
   skipTo(g, 'combatMove');
   g.s.players.LAX.oil = 5;
-  assert.ok(g.move([heli.id], 'GUN', 'LDT').ok);
+  assert.ok(g.move([heli.id], 'GUN', 'SOUTH').ok, 'scouting unowned land outside the wall');
   assert.equal(g.s.players.LAX.oil, 4);
   skipTo(g, 'noncombatMove');
   assert.equal(g.canEndPhase().ok, false, 'helicopter still in the air');
   assert.match(g.canEndPhase().error, /Land your aircraft/);
-  assert.equal(g.findPath([heli.id], 'LDT', 'LN'), null, 'LN is not a base');
-  assert.ok(g.move([heli.id], 'LDT', 'GUN').ok, 'back to the Gundersen helipad');
+  assert.equal(g.findPath([heli.id], 'SOUTH', 'LDT'), null, 'LDT is not a base');
+  assert.ok(g.move([heli.id], 'SOUTH', 'GUN').ok, 'back to the Gundersen helipad');
   assert.equal(g.s.players.LAX.oil, 4, 'no second oil charge this turn');
   assert.ok(g.canEndPhase().ok);
   g.endPhase();
@@ -149,6 +154,7 @@ test('aircraft pay 1 oil to move in a turn, not per space', () => {
   g.s.players.LAX.oil = 0;
   assert.equal(g.unitCanMove(heli), false, 'no oil, no flight');
   g.s.players.LAX.oil = 1;
+  skipTo(g, 'noncombatMove');
   assert.ok(g.move([heli.id], 'GUN', 'FI').ok, 'two spaces (GUN-LDT-FI) to the airport for one oil');
   assert.equal(g.s.players.LAX.oil, 0);
 });
@@ -159,11 +165,89 @@ test('helicopter can carry one infantry farther than it could walk', () => {
   g._startPlayerTurn('LAX');
   const heli = g._addUnit('heli', 'LAX', 'GUN');
   const inf = ids(g, 'GUN', 'LAX', 'inf')[0];
-  skipTo(g, 'combatMove');
+  skipTo(g, 'noncombatMove');
   g.s.players.LAX.oil = 5;
   assert.ok(g.move([heli.id, inf], 'GUN', 'FI').ok, 'GUN->LDT->FI is 2 spaces');
   assert.equal(g.s.units[inf].at, 'FI');
   assert.equal(g.s.players.LAX.oil, 4, 'carried infantry burns no oil');
+});
+
+test('A&A combat move: units cannot end in friendly land (tanks may pass through it)', () => {
+  const g = newGame();
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 3;
+  const [inf] = ids(g, 'LDT', 'LAX', 'inf');
+  const [tank] = ids(g, 'LDT', 'LAX', 'tank');
+  assert.equal(g.findPath([inf], 'LDT', 'LN'), null, 'infantry: friendly land is noncombat only');
+  assert.ok(g.move([tank], 'LDT', 'LN').ok, 'a tank may step into friendly land with a space left');
+  assert.equal(g.canEndPhase().ok, false, 'but it cannot stop there');
+  assert.match(g.canEndPhase().error, /must end in battle or a capture/);
+  assert.ok(g.move([tank], 'LN', 'EAST').ok, 'on through the gate to capture');
+  assert.ok(g.canEndPhase().ok);
+});
+
+test('A&A retreat: back to the adjacent friendly territory the attackers entered from', () => {
+  const g = newGame();
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 3;
+  const [tank] = ids(g, 'LDT', 'LAX', 'tank');
+  assert.ok(g.move([tank], 'LDT', 'ODT').ok, 'two spaces in one go, via LN');
+  g.endPhase();
+  rig(g, [6, 6, 6, 6]); // all miss
+  g.battleRound('ODT');
+  assert.deepEqual(g.retreatOptions('ODT'), ['LN'], 'not LDT, two spaces back');
+  assert.equal(g.retreat('ODT', 'LDT').ok, false);
+  assert.ok(g.retreat('ODT', 'LN').ok);
+
+  const h = newGame();
+  skipTo(h, 'combatMove');
+  h.s.players.LAX.oil = 3;
+  const [t2] = ids(h, 'LDT', 'LAX', 'tank');
+  assert.ok(h.move([t2], 'LDT', 'FI').ok, 'blitz French Island');
+  assert.ok(h.move([t2], 'FI', 'ODT').ok);
+  assert.ok(h.move(ids(h, 'LN', 'LAX', 'inf'), 'LN', 'ODT').ok);
+  h.endPhase();
+  rig(h, [6, 6, 6, 6, 6]);
+  h.battleRound('ODT');
+  assert.deepEqual(h.retreatOptions('ODT').sort(), ['FI', 'LN'], 'either entry point; the blitzed island is friendly now');
+  assert.ok(h.retreat('ODT', 'FI').ok);
+  assert.equal(h.unitsAt('FI', 'LAX').length, 2, 'all attackers retreat together to one place');
+});
+
+test('retreating aircraft stay over the battle and fly home in noncombat', () => {
+  const g = newGame();
+  g.s.territories.FI.owner = 'LAX';
+  g._addUnit('zombie', 'Z', 'SOUTH'); g._addUnit('zombie', 'Z', 'SOUTH');
+  g._startPlayerTurn('LAX');
+  const heli = g._addUnit('heli', 'LAX', 'GUN');
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 5;
+  g.s.walls['GUN|SOUTH'] = false;
+  const gunInf = ids(g, 'GUN', 'LAX', 'inf');
+  assert.ok(g.move(gunInf, 'GUN', 'SOUTH').ok);
+  assert.ok(g.move([heli.id], 'GUN', 'SOUTH').ok);
+  g.endPhase();
+  rig(g, [6, 6, 6, 6]); // everyone misses
+  g.battleRound('SOUTH');
+  assert.ok(g.retreat('SOUTH', 'GUN').ok);
+  assert.equal(g.s.units[gunInf[0]].at, 'GUN');
+  assert.equal(g.s.units[heli.id].at, 'SOUTH', 'helicopter stays put');
+  skipTo(g, 'noncombatMove');
+  assert.equal(g.canEndPhase().ok, false);
+  assert.ok(g.move([heli.id], 'SOUTH', 'GUN').ok);
+  assert.ok(g.canEndPhase().ok);
+});
+
+test('capturing the enemy City Hall seizes its treasury', () => {
+  const g = newGame();
+  for (const u of g.unitsAt('ODT', 'ONA')) g._removeUnit(u.id);
+  g.s.players.ONA.sp = 17;
+  skipTo(g, 'combatMove');
+  const before = g.s.players.LAX.sp;
+  assert.ok(g.move(ids(g, 'LN', 'LAX', 'inf'), 'LN', 'ODT').ok);
+  assert.equal(g.owner('ODT'), 'LAX');
+  assert.equal(g.s.players.ONA.sp, 0);
+  assert.equal(g.s.players.LAX.sp, before + 17);
 });
 
 test('land units cross the wall only at gates or breaches; aircraft fly over', () => {
@@ -216,7 +300,7 @@ test('units that moved this turn are not fortified', () => {
   skipTo(g, 'combatMove');
   const inf = ids(g, 'LDT', 'LAX', 'inf')[0];
   const lnInf = ids(g, 'LN', 'LAX', 'inf')[0];
-  g.move([lnInf], 'LN', 'LDT');
+  assert.ok(g.move([lnInf], 'LN', 'EAST').ok, 'sallies out through the gate instead of firing');
   void inf;
   g.endPhase();
   assert.equal(g.s.wallFire.find(w => w.from === 'LN'), undefined);

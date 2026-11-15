@@ -80,7 +80,7 @@ A **round** is:
 Each player turn has these phases, in order (as in Axis & Allies):
 
 1. **Purchase units**: spend SP. Purchased units wait off-board.
-2. **Combat move**: move units into hostile territories (enemy units or zombies) and into empty territories you want to capture.
+2. **Combat move**: move units into hostile territories (enemy units or zombies) and into empty territories you want to capture. As in Axis & Allies, **every combat move must end in a battle or a capture**: you can't park units in your own territory now (do that in Noncombat Move). A tank may pass through your own territory on the way.
 3. **Conduct combat**: first **wall fire** (§7), then resolve each battle.
 4. **Noncombat move**: units that did not move or fight this turn may move into friendly territory. Aircraft must land.
 5. **Mobilize** new units.
@@ -148,8 +148,9 @@ At the start of **Conduct Combat**, each inside territory that you own and that 
 Standard Axis & Allies land combat:
 1. Attacker rolls for every attacking unit; defender rolls for every defending unit.
 2. Each side removes casualties equal to the hits scored. Each owner chooses which of their own units die (default: cheapest first).
-3. The attacker may **retreat** after any round. All surviving attackers move together to **one** friendly territory from which attacking units came.
+3. The attacker may **retreat** after any round. All surviving attacking **land** units move together to **one adjacent friendly territory** that at least one of them **entered the battle from** (for a tank that drove two spaces, that's the space it passed through last, not where it started). Attacking **aircraft stay** over the battlefield and fly home in Noncombat Move.
 4. Continue until one side is gone or the attacker retreats. If attacking land units survive, the attacker takes control.
+5. **Capturing the enemy City Hall** also seizes all of the enemy's **unspent SP** (as capturing a capital does in Axis & Allies).
 
 Casualties in player-vs-player fights are simply removed. They **do not** become zombies.
 

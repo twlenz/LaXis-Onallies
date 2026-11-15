@@ -129,7 +129,7 @@
 <p>Each player turn has these phases, in order (as in Axis &amp; Allies):</p>
 <ol>
 <li><strong>Purchase units</strong>: spend SP. Purchased units wait off-board.</li>
-<li><strong>Combat move</strong>: move units into hostile territories (enemy units or zombies) and into empty territories you want to capture.</li>
+<li><strong>Combat move</strong>: move units into hostile territories (enemy units or zombies) and into empty territories you want to capture. As in Axis &amp; Allies, <strong>every combat move must end in a battle or a capture</strong>: you can&#39;t park units in your own territory now (do that in Noncombat Move). A tank may pass through your own territory on the way.</li>
 <li><strong>Conduct combat</strong>: first <strong>wall fire</strong> (§7), then resolve each battle.</li>
 <li><strong>Noncombat move</strong>: units that did not move or fight this turn may move into friendly territory. Aircraft must land.</li>
 <li><strong>Mobilize</strong> new units.</li>
@@ -209,7 +209,9 @@
 <li>You can <strong>buy</strong> your aircraft only while you <strong>control the Airport</strong>. Each side may have <strong>at most one</strong> aircraft at a time; if yours is destroyed, you may buy another.</li>
 <li>You can <strong>fly</strong> your aircraft only while you control the Airport. If you lose the Airport, your aircraft is <strong>grounded</strong>: it cannot move, but it still defends.</li>
 <li>New aircraft are placed at their landing site (the helicopter goes to Gundersen if you control it, otherwise to the Airport).</li>
-<li>At the end of your Noncombat Move, any aircraft that moved this turn and is <strong>not on a landing site you control is destroyed</strong> (it crashed). Landing sites are the <strong>Airport</strong> for both aircraft, plus <strong>Gundersen</strong> for the helicopter.</li>
+<li><strong>Landing sites:</strong> the <strong>Airport</strong> for both aircraft, plus <strong>Gundersen</strong> for the helicopter. A landing site must have been yours <strong>at the start of your turn</strong>, so you can&#39;t land at an Airport you captured this turn.</li>
+<li><strong>Plan the trip home:</strong> in combat move, an aircraft may only fly somewhere it can still get back to a landing site with the movement it has left (Axis &amp; Allies rule).</li>
+<li><strong>Land before you finish:</strong> you can&#39;t end Noncombat Move while an aircraft that flew this turn is off its landing site and could still reach one. If it truly cannot reach one (for example, it was stranded by a lost battle), it crashes when your turn ends.</li>
 <li>Aircraft cannot capture territory. Aircraft may fly over anything, including water, enemies and zombies.</li>
 <li><strong>Helicopter transport:</strong> the helicopter may carry <strong>one infantry</strong> that has not moved this turn. Both move together using the helicopter&#39;s movement, and the infantry is dropped where the helicopter ends.</li>
 </ul>
@@ -240,8 +242,9 @@
 <ol>
 <li>Attacker rolls for every attacking unit; defender rolls for every defending unit.</li>
 <li>Each side removes casualties equal to the hits scored. Each owner chooses which of their own units die (default: cheapest first).</li>
-<li>The attacker may <strong>retreat</strong> after any round. All surviving attackers move together to <strong>one</strong> friendly territory from which attacking units came.</li>
+<li>The attacker may <strong>retreat</strong> after any round. All surviving attacking <strong>land</strong> units move together to <strong>one adjacent friendly territory</strong> that at least one of them <strong>entered the battle from</strong> (for a tank that drove two spaces, that&#39;s the space it passed through last, not where it started). Attacking <strong>aircraft stay</strong> over the battlefield and fly home in Noncombat Move.</li>
 <li>Continue until one side is gone or the attacker retreats. If attacking land units survive, the attacker takes control.</li>
+<li><strong>Capturing the enemy City Hall</strong> also seizes all of the enemy&#39;s <strong>unspent SP</strong> (as capturing a capital does in Axis &amp; Allies).</li>
 </ol>
 <p>Casualties in player-vs-player fights are simply removed. They <strong>do not</strong> become zombies.</p>
 <h3>Attacking zombies</h3>

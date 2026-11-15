@@ -196,7 +196,13 @@
     }
     if (r && r.ok) return r;
     if (s.phase === 'zombieMove') delete s._aiZombieMoved;
-    return g.endPhase();
+    const end = g.endPhase();
+    if (!end.ok && s.phase === 'combatMove') {
+      // safety net: never get stuck on a move that can't legally end the phase
+      while (g.canUndoMove() && !g.canEndPhase().ok) g.undoMove();
+      return g.endPhase();
+    }
+    return end;
   }
 
   /** Play until the given side's turn is over (or the game ends). */
