@@ -163,3 +163,6 @@ label.opt { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
 #endBtn:disabled { filter: grayscale(1); }
 .route-blitz { fill: rgba(255,140,0,.25); stroke: #e8742a; stroke-width: 2; }
 .route-tag { font: 700 9px system-ui, sans-serif; fill: #b4500a; text-anchor: middle; paint-order: stroke; stroke: #fffaf0; stroke-width: 3px; }
+.pip { fill: #fffaf0; stroke: #2b2117; stroke-width: .6; }
+.pip.on { fill: #ffd54a; }
+small.warn { color: var(--lax); font-weight: 700; }
