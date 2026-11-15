@@ -107,8 +107,11 @@ Combat uses the Axis & Allies system: a unit **hits on a d6 roll equal to or bel
 - Units without oil stay put. They still defend, and tanks can still fire from the wall.
 - At **Collect Income**, gain **1 oil for each Kwik Trip** in territories you control.
 
-### Blitzing
-During combat move, a tank may move through an **empty** unowned or enemy territory and keep going. It captures that territory on the way.
+### Tank movement and blitzing
+- A tank moves up to **2 spaces**. It may take them as **separate steps** in the same move phase: move one space, do other things, then move it one more.
+- **Blitzing:** during combat move, a tank that enters an **empty** unowned or enemy territory captures it and may keep going.
+- Entering a territory with **enemy units or zombies** starts a battle and **ends the tank's move**.
+- A tank that moved during combat move cannot move again in noncombat move, as in Axis & Allies.
 
 ### Aircraft and the Airport
 - You can **buy** your aircraft only while you **control the Airport**. Each side may have **at most one** aircraft at a time; if yours is destroyed, you may buy another.

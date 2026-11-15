@@ -324,7 +324,16 @@
     const d = 'M' + pts.map(p => `${p[0]},${p[1]}`).join('L');
     el('path', { d, class: 'route-casing' }, layers.route);
     el('path', { d, class: 'route' }, layers.route);
-    for (const p of pts.slice(1, -1)) el('circle', { cx: p[0], cy: p[1], r: 3, class: 'route-stop' }, layers.route);
+    const me = game.s.current;
+    path.slice(1).forEach((id, i) => {
+      const [x, y] = game.T[id].label;
+      const blitz = game.s.phase === 'combatMove' && game.owner(id) !== me && !game.hostileTo(me, id) && pickedIds().some(uid => UNITS[game.s.units[uid].type].land);
+      if (blitz) {
+        el('circle', { cx: x, cy: y, r: 9, class: 'route-blitz' }, layers.route);
+        const t = el('text', { x, y: y - 12, class: 'route-tag' }, layers.route);
+        t.textContent = i < path.length - 2 ? 'blitz' : 'capture';
+      } else if (i < path.length - 2) el('circle', { cx: x, cy: y, r: 3, class: 'route-stop' }, layers.route);
+    });
   }
   // ------------------------------------------------------------ animation
   function positions() {
@@ -512,7 +521,8 @@
   }
   function pickedIds() {
     if (!sel) return [];
-    const mov = movableUnits(sel.tid);
+    const pref = new Set(sel.prefer || []);
+    const mov = movableUnits(sel.tid).sort((a, b) => pref.has(b.id) - pref.has(a.id));
     const out = [];
     for (const type in sel.pick) out.push(...mov.filter(u => u.type === type).slice(0, sel.pick[type]).map(u => u.id));
     return out;
@@ -540,6 +550,7 @@
         <span class="stepper"><button data-pick="${type}" data-d="-1">−</button><output>${n}</output><button data-pick="${type}" data-d="1">+</button></span></div>`;
     }
     h += `<p class="help">${!pickedCount() ? 'No units picked.' : reach.length ? 'Click a bright territory to move there (hover to see the route).' : 'No legal destination for this selection.'}</p>`;
+    if (game.s.phase === 'combatMove' && mov.some(u => u.type === 'tank')) h += `<p class="help"><b>Tanks</b> move up to 2 spaces, one step at a time if you like: step into an empty enemy or unowned territory to blitz (capture) it and keep going. Moving into enemy units or zombies ends the tank's move. A two-space click routes through your own land when it can.</p>`;
     h += `<p class="help controls">Click: pick 1 · click again or click an icon: +1 · <b>double-click</b> or Shift-click: all · Ctrl-click an icon: all of that type · right-click: put 1 back · Esc: clear</p>`;
     if (game.s.phase === 'zombieMove') {
       const walls = [...game.adj[sel.tid]].filter(n => game.wallIntact(sel.tid, n));
@@ -752,6 +763,12 @@
       lastClick = null;
       if (!res.ok) { act(res); return; }
       sel = null; reach = []; hoverTid = null; errMsg = '';
+      // tanks with a space left stay picked so the next step (e.g. a blitz) is one click away
+      const still = ids.map(id => game.s.units[id]).filter(u => u && u.at === tid && game.unitCanMove(u));
+      if (still.length && game.s.phase !== 'zombieMove') {
+        sel = { tid, pick: game.countBy(still), lastType: still[0].type, prefer: still.map(u => u.id) };
+        computeReach();
+      }
       save();
       if (stepDelay() > 0) animateMoves(diffMoves(before), Math.min(450, stepDelay() * 0.6)).then(render);
       else render();

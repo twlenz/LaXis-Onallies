@@ -27,7 +27,8 @@ An area-control war game set in **La Crosse** and **Onalaska, Wisconsin**. La Cr
 | Double-click or Shift-click | Pick every unit there that can move |
 | Ctrl-click a unit icon | Pick all units of that type |
 | Right-click | Put 1 unit back (Shift-right-click or Esc clears) |
-| Hover a bright territory | Preview the route |
+| Hover a bright territory | Preview the route (territories it would blitz or capture are ringed in orange) |
+| Tanks | Move 2 spaces in one click, or one step at a time to choose what to blitz; after a step the tank stays picked |
 | Click a bright territory | Move the picked units there |
 | ↶ Undo move / Reset phase | Take back the last move / the whole phase |
 | Battles | Roll a round, then each side picks its own casualties (pre-filled cheapest-first). "Fight to the end" auto-picks. The next-phase button stays grey until every battle is resolved. |

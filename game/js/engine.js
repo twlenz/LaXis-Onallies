@@ -308,7 +308,9 @@
         if (!this.airportControlled(p)) return false; // grounded
         return u.moved < def.move;
       }
-      if (u.moved > 0) return false;
+      // land units may move in steps (a tank: 1 space, then another) until their movement is used;
+      // entering a battle (enemy units or zombies) ends their move
+      if (u.moved >= def.move) return false;
       if (this.s.phase === 'noncombatMove' && u.combatMoved) return false;
       if (this.s.phase === 'combatMove' && this.hostileTo(p, u.at)) return false;
       return true;
@@ -355,29 +357,36 @@
         if (combat && this.owner(tid) !== p && g.land.some(u => u.type !== 'tank')) return false;
         return true;
       };
-      const prev = { [from]: null };
+      // breadth-first distances over legal steps
+      const canStep = (a, b) => g.flying || this.landCanCross(a, b);
+      const expandable = (tid) => tid === from || passOk(tid);
+      const dist = { [from]: 0 };
       let frontier = [from];
       for (let step = 1; step <= g.range && frontier.length; step++) {
         const next = [];
         for (const cur of frontier) {
-          if (cur !== from && !passOk(cur)) continue;
+          if (!expandable(cur)) continue;
           for (const n of this.adj[cur]) {
-            if (n in prev) continue;
-            if (!g.flying && !this.landCanCross(cur, n)) continue;
-            prev[n] = cur;
-            if (n === to) {
-              if (!destOk(n)) { delete prev[n]; continue; }
-              const path = [n];
-              let c = cur;
-              while (c !== null) { path.unshift(c); c = prev[c]; }
-              return { path, cost: path.length - 1 };
-            }
+            if (n in dist || !canStep(cur, n)) continue;
+            dist[n] = step;
             next.push(n);
           }
         }
         frontier = next;
       }
-      return null;
+      if (!(to in dist) || !destOk(to)) return null;
+      // walk back, preferring your own territory: nothing is blitzed unless it has to be
+      // (to blitz a particular territory, move one step at a time)
+      const rank = (tid) => (tid === from ? 0 : this.owner(tid) === p ? 1 : 2);
+      const path = [to];
+      let cur = to;
+      while (cur !== from) {
+        const cands = [...this.adj[cur]].filter(c => dist[c] === dist[cur] - 1 && expandable(c) && canStep(c, cur));
+        cands.sort((a, b) => rank(a) - rank(b));
+        cur = cands[0];
+        path.unshift(cur);
+      }
+      return { path, cost: path.length - 1 };
     }
 
     reachable(unitIds, from) {
@@ -418,7 +427,8 @@
       for (const u of fuelers) { u.oilPaid = true; this.s.players[p].oil -= UNITS[u.type].oil; }
       for (const u of units) {
         if (UNITS[u.type].air) u.moved += path.cost;
-        else u.moved = UNITS[u.type].move; // land units finish moving
+        else if (g.cargo.includes(u)) u.moved = UNITS[u.type].move; // dropped off by the helicopter
+        else u.moved += path.cost;
         if (this.s.phase === 'combatMove') { u.combatMoved = true; u.origin = from; }
         u.at = to;
       }

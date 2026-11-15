@@ -55,6 +55,47 @@ test('movement: capture empty territory, oil for tanks, walls do not block playe
   assert.equal(g.s.units[tank].at, 'EAST');
 });
 
+test('tanks move a space at a time: blitz on, stop when they hit a battle', () => {
+  const g = newGame();
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 3;
+  const [tank] = ids(g, 'LDT', 'LAX', 'tank');
+  // step 1: into unowned French Island (blitz capture), then on into Onalaska's City Hall (battle)
+  assert.ok(g.move([tank], 'LDT', 'FI').ok);
+  assert.equal(g.owner('FI'), 'LAX');
+  assert.ok(g.unitCanMove(g.s.units[tank]), 'one space left');
+  assert.equal(g.s.players.LAX.oil, 2, 'oil paid once');
+  assert.ok(g.move([tank], 'FI', 'ODT').ok);
+  assert.equal(g.s.players.LAX.oil, 2, 'second step is free');
+  assert.equal(g.unitCanMove(g.s.units[tank]), false, 'movement used up, and it is in a battle');
+  // infantry still move once
+  const [inf] = ids(g, 'LDT', 'LAX', 'inf');
+  assert.ok(g.move([inf], 'LDT', 'LN').ok);
+  assert.equal(g.unitCanMove(g.s.units[inf]), false);
+});
+
+test('a tank that starts a battle with its first step cannot keep going', () => {
+  const g = newGame();
+  g._addUnit('zombie', 'Z', 'LN');
+  for (const u of g.unitsAt('LN', 'LAX')) g._removeUnit(u.id);
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 3;
+  const [tank] = ids(g, 'LDT', 'LAX', 'tank');
+  assert.ok(g.move([tank], 'LDT', 'LN').ok);
+  assert.equal(g.unitCanMove(g.s.units[tank]), false);
+});
+
+test('a two-space move goes through your own territory unless you step through enemy land', () => {
+  const g = newGame();
+  skipTo(g, 'combatMove');
+  const [tank] = ids(g, 'LDT', 'LAX', 'tank');
+  // LDT -> ODT can go via LN (yours) or FI (unowned): the default route avoids blitzing
+  assert.deepEqual(g.findPath([tank], 'LDT', 'ODT').path, ['LDT', 'LN', 'ODT']);
+  g.s.players.LAX.oil = 1;
+  g.move([tank], 'LDT', 'ODT');
+  assert.equal(g.owner('FI'), null, 'French Island was not blitzed');
+});
+
 test('land units cross the wall only at gates or breaches; aircraft fly over', () => {
   const g = newGame();
   skipTo(g, 'combatMove');
