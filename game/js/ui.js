@@ -61,7 +61,9 @@
     const ART = window.LaxisArt;
     if (ART) defs.insertAdjacentHTML('beforeend', ART.WAVES);
     el('rect', { x: x0 - w, y: y0 - h, width: w * 3, height: h * 3, fill: ART ? 'url(#waves)' : 'var(--water)' }, svg);
-    for (const name of ['land', 'terr', 'zom', 'water', 'roads', 'borders', 'walls', 'gates', 'doodles', 'arrows', 'labels', 'units']) layers[name] = el('g', { class: 'layer-' + name }, svg);
+    for (const name of ['land', 'terr', 'zom', 'water', 'roads', 'borders', 'walls', 'gates', 'doodles', 'arrows', 'labels', 'route', 'units']) layers[name] = el('g', { class: 'layer-' + name }, svg);
+    const rh = el('marker', { id: 'routehead', viewBox: '0 0 10 10', refX: 6, refY: 5, markerWidth: 4, markerHeight: 4, orient: 'auto' }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 z', fill: '#2b2117' }, rh);
     for (const p of MAP.backdrop || []) el('path', { d: p.path, fill: p.kind === 'mn' ? 'var(--mn)' : 'var(--outside)', stroke: '#9b927f', 'stroke-width': .4 }, layers.land);
     for (const t of MAP.territories) {
       const p = el('path', { d: t.path, class: 'terr' + (t.inside ? '' : ' outside'), 'data-id': t.id }, layers.terr);
@@ -137,12 +139,29 @@
       ev.preventDefault();
       zoomAt(ev.deltaY < 0 ? 0.85 : 1 / 0.85, toSvg(ev.clientX, ev.clientY));
     }, { passive: false });
+    const hitAt = (cx, cy) => {
+      const hit = document.elementFromPoint(cx, cy);
+      if (!hit || !hit.closest) return null;
+      const chip = hit.closest('.unitchip[data-tid]');
+      if (chip) return { tid: chip.dataset.tid, type: chip.dataset.type, owner: chip.dataset.owner };
+      const id = hit.getAttribute && hit.getAttribute('data-id');
+      return id ? { tid: id } : null;
+    };
+    svg.addEventListener('contextmenu', (ev) => ev.preventDefault());
     svg.addEventListener('pointerdown', (ev) => {
+      if (ev.button === 2) { drag = { right: true, x: ev.clientX, y: ev.clientY }; return; }
       drag = { x: ev.clientX, y: ev.clientY, vx: vb.x, vy: vb.y, moved: false, target: ev.target };
       svg.setPointerCapture(ev.pointerId);
     });
+    svg.addEventListener('pointerleave', () => { if (hoverTid) { hoverTid = null; drawRoute(); } });
     svg.addEventListener('pointermove', (ev) => {
-      if (!drag) return;
+      if (!drag) {
+        const h = hitAt(ev.clientX, ev.clientY);
+        const tid = h ? h.tid : null;
+        if (tid !== hoverTid) { hoverTid = tid; drawRoute(); }
+        return;
+      }
+      if (drag.right) return;
       const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
       if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
       if (drag.moved) {
@@ -153,10 +172,10 @@
     });
     svg.addEventListener('pointerup', (ev) => {
       svg.classList.remove('dragging');
+      if (drag && drag.right) { onRightClick(ev.shiftKey); drag = null; return; }
       if (drag && !drag.moved) {
-        const hit = document.elementFromPoint(ev.clientX, ev.clientY);
-        const id = hit && hit.getAttribute && hit.getAttribute('data-id');
-        if (id) onTerritoryClick(id);
+        const h = hitAt(ev.clientX, ev.clientY);
+        if (h) onTerritoryClick(h.tid, { type: h.type, owner: h.owner, shift: ev.shiftKey, ctrl: ev.ctrlKey || ev.metaKey });
       }
       drag = null;
     });
@@ -216,6 +235,7 @@
     layers.arrows.style.display = $('mArrows').checked ? '' : 'none';
     layers.roads.style.display = $('mRoads').checked ? '' : 'none';
     renderUnits();
+    drawRoute();
     renderSide();
     renderLog();
     if (s.winner && !render.shownOver) { render.shownOver = true; showGameOver(); }
@@ -233,8 +253,11 @@
     }[ph] || 'End phase';
   }
   const CHIP_W = 22, CHIP_H = 20, CHIP_GAP = 2.5;
-  function drawChip(parent, x, y, owner, type, n) {
-    const g = el('g', { class: 'unitchip', transform: `translate(${x},${y})` }, parent);
+  function drawChip(parent, x, y, owner, type, n, opts) {
+    opts = opts || {};
+    const lift = opts.picked ? `translate(${x - CHIP_W * 0.1},${y - 8}) scale(1.2)` : `translate(${x},${y})`;
+    const g = el('g', { class: 'unitchip' + (opts.picked ? ' picked' : '') + (opts.dim ? ' dim' : ''), transform: lift }, parent);
+    if (opts.tid) { g.dataset.tid = opts.tid; g.dataset.type = type; g.dataset.owner = owner; }
     const bg = el('rect', { width: CHIP_W, height: CHIP_H, rx: 4 }, g);
     bg.setAttribute('class', 'chip-' + owner);
     const ic = el('g', { transform: `translate(${CHIP_W / 2},${CHIP_H / 2}) scale(.82)`, fill: '#fff', color: '#fff' }, g);
@@ -244,7 +267,8 @@
       const tx = el('text', { x: CHIP_W - 1, y: 4.2, class: 'count' }, g);
       tx.textContent = n;
     }
-    const tt = el('title', {}, g); tt.textContent = `${n} ${SIDE[owner].name} ${UNITS[type].name}`;
+    const tt = el('title', {}, g);
+    tt.textContent = `${n} ${SIDE[owner].name} ${UNITS[type].name}` + (opts.picked ? ' (selected)' : '');
     return g;
   }
   function chipOrigin(tid, nChips) {
@@ -263,17 +287,42 @@
       by[k][key] = (by[k][key] || 0) + 1;
     }
     const order = ['LAX', 'ONA', 'Z'];
+    const typeOrder = ['inf', 'tank', 'heli', 'plane', 'zombie'];
+    const moverSide = game.isZombieTurn() ? Z : game.s.current;
     for (const tid in by) {
-      const entries = Object.entries(by[tid]).sort((a, b) => order.indexOf(a[0].split(':')[0]) - order.indexOf(b[0].split(':')[0]));
-      let [x, y] = chipOrigin(tid, entries.length);
-      for (const [key, n] of entries) {
+      const chips = [];
+      for (const [key, n] of Object.entries(by[tid])) {
         const [owner, type] = key.split(':');
-        drawChip(layers.units, x, y, owner, type, n);
+        const picked = sel && sel.tid === tid && owner === moverSide ? Math.min(n, sel.pick[type] || 0) : 0;
+        if (picked) chips.push({ owner, type, n: picked, picked: true });
+        if (n - picked > 0) chips.push({ owner, type, n: n - picked, picked: false });
+      }
+      const anyPicked = chips.some(c => c.picked);
+      chips.sort((a, b) => (b.picked - a.picked) || (order.indexOf(a.owner) - order.indexOf(b.owner)) || (typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type)));
+      let [x, y] = chipOrigin(tid, chips.length);
+      for (const c of chips) {
+        drawChip(layers.units, x, y, c.owner, c.type, c.n, { tid, picked: c.picked, dim: anyPicked && !c.picked && c.owner === moverSide });
         x += CHIP_W + CHIP_GAP;
       }
     }
   }
 
+  // ------------------------------------------------------------ route preview (TripleA-style)
+  let hoverTid = null;
+  function drawRoute() {
+    if (!layers.route) return;
+    layers.route.innerHTML = '';
+    if (!sel || !hoverTid || !reach.includes(hoverTid)) return;
+    let path = null;
+    if (game.s.phase === 'zombieMove') path = [sel.tid, hoverTid];
+    else { const r = game.findPath(pickedIds(), sel.tid, hoverTid); path = r && r.path; }
+    if (!path) return;
+    const pts = path.map(id => game.T[id].label);
+    const d = 'M' + pts.map(p => `${p[0]},${p[1]}`).join('L');
+    el('path', { d, class: 'route-casing' }, layers.route);
+    el('path', { d, class: 'route' }, layers.route);
+    for (const p of pts.slice(1, -1)) el('circle', { cx: p[0], cy: p[1], r: 3, class: 'route-stop' }, layers.route);
+  }
   // ------------------------------------------------------------ animation
   function positions() {
     const m = {};
@@ -487,7 +536,8 @@
       h += `<div class="row"><span class="name">${UNITS[type].name} <small>(${c[type]} can move)</small></span>
         <span class="stepper"><button data-pick="${type}" data-d="-1">−</button><output>${n}</output><button data-pick="${type}" data-d="1">+</button></span></div>`;
     }
-    h += `<p class="help">${reach.length ? 'Click a highlighted territory to move there.' : 'No legal destination for this selection.'}</p>`;
+    h += `<p class="help">${!pickedCount() ? 'No units picked.' : reach.length ? 'Click a bright territory to move there (hover to see the route).' : 'No legal destination for this selection.'}</p>`;
+    h += `<p class="help controls">Click: pick 1 · click again or click an icon: +1 · <b>double-click</b> or Shift-click: all · Ctrl-click an icon: all of that type · right-click: put 1 back · Esc: clear</p>`;
     if (game.s.phase === 'zombieMove') {
       const walls = [...game.adj[sel.tid]].filter(n => game.wallIntact(sel.tid, n));
       for (const n of walls) h += `<div class="row"><button data-smash="${n}" class="danger">Tear down wall → ${escapeHtml(tname(n))}</button></div>`;
@@ -592,26 +642,85 @@
     return res;
   }
 
-  function selectTerritory(tid) {
-    sel = { tid, pick: {} };
-    for (const u of movableUnits(tid)) sel.pick[u.type] = (sel.pick[u.type] || 0) + 1;
+  const TYPE_ORDER = ['inf', 'tank', 'heli', 'plane', 'zombie'];
+  function availableByType(tid) {
+    const c = {};
+    for (const u of movableUnits(tid)) c[u.type] = (c[u.type] || 0) + 1;
+    return c;
+  }
+  function selectTerritory(tid, all) {
+    sel = { tid, pick: {}, lastType: null };
+    if (all) for (const u of movableUnits(tid)) sel.pick[u.type] = (sel.pick[u.type] || 0) + 1;
     computeReach();
   }
+  /** Pick one more unit: of the clicked type, else the type picked last, else the first available. */
+  function pickOne(type) {
+    const avail = availableByType(sel.tid);
+    const has = (t) => t && (avail[t] || 0) > (sel.pick[t] || 0);
+    const t = has(type) ? type : has(sel.lastType) ? sel.lastType : TYPE_ORDER.find(has);
+    if (!t) return false;
+    sel.pick[t] = (sel.pick[t] || 0) + 1;
+    sel.lastType = t;
+    return true;
+  }
+  function pickAllOfType(type) {
+    const avail = availableByType(sel.tid);
+    if (!avail[type]) return false;
+    sel.pick[type] = avail[type];
+    sel.lastType = type;
+    return true;
+  }
+  function pickedCount() { return sel ? Object.values(sel.pick).reduce((a, b) => a + b, 0) : 0; }
+  let lastClick = null;
 
-  function onTerritoryClick(tid) {
+  /**
+   * Map clicks, TripleA-style:
+   *   click            pick 1 unit (click again: +1; click a unit icon: 1 of that type)
+   *   double-click / Shift-click   pick every unit that can move
+   *   Ctrl-click a unit icon       pick all units of that type
+   *   right-click      put 1 back; Shift-right-click / Esc: clear
+   *   click a bright destination   move the picked units there
+   */
+  function onTerritoryClick(tid, mods) {
+    mods = mods || {};
     if (isCpuTurn()) return;
     errMsg = '';
-    const ph = game.s.phase;
-    const moving = ph === 'combatMove' || ph === 'noncombatMove' || (ph === 'zombieMove' && game.s.zombieController);
-    if (moving && sel && reach.includes(tid)) {
+    const now = performance.now();
+    const dbl = !!lastClick && lastClick.tid === tid && now - lastClick.t < 380;
+    lastClick = { tid, t: now };
+    const moving = isMovingPhase();
+    if (moving && sel && sel.tid !== tid && reach.includes(tid) && pickedCount()) {
       const ids = pickedIds();
-      const res = ph === 'zombieMove' ? game.zombieMove(ids, sel.tid, tid) : game.move(ids, sel.tid, tid);
-      act(res);
-      if (res.ok) { sel = null; reach = []; render(); }
+      const before = positions();
+      const res = game.s.phase === 'zombieMove' ? game.zombieMove(ids, sel.tid, tid) : game.move(ids, sel.tid, tid);
+      lastClick = null;
+      if (!res.ok) { act(res); return; }
+      sel = null; reach = []; hoverTid = null; errMsg = '';
+      save();
+      if (stepDelay() > 0) animateMoves(diffMoves(before), Math.min(450, stepDelay() * 0.6)).then(render);
+      else render();
       return;
     }
-    if (sel && sel.tid === tid) { sel = null; reach = []; render(); return; }
-    selectTerritory(tid);
+    if (!moving || !movableUnits(tid).length) {
+      // nothing to move here: just show the territory's details
+      sel = sel && sel.tid === tid && !dbl ? null : { tid, pick: {}, lastType: null };
+      reach = [];
+      render();
+      return;
+    }
+    if (!sel || sel.tid !== tid) sel = { tid, pick: {}, lastType: null };
+    if (mods.shift || dbl) selectTerritory(tid, true);
+    else if (mods.ctrl && mods.type) pickAllOfType(mods.type);
+    else pickOne(mods.type);
+    computeReach();
+    render();
+  }
+  function onRightClick(shift) {
+    if (!sel || isCpuTurn()) return;
+    if (shift || pickedCount() <= 1) { sel = null; reach = []; render(); return; }
+    const t = (sel.lastType && sel.pick[sel.lastType]) ? sel.lastType : [...TYPE_ORDER].reverse().find(x => sel.pick[x]);
+    if (t) sel.pick[t] -= 1;
+    computeReach();
     render();
   }
 
