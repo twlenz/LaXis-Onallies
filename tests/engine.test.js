@@ -96,6 +96,76 @@ test('a two-space move goes through your own territory unless you step through e
   assert.equal(g.owner('FI'), null, 'French Island was not blitzed');
 });
 
+test('aircraft fly into combat only if they can still get back to base', () => {
+  const g = newGame();
+  g.s.territories.FI.owner = 'LAX';
+  g._startPlayerTurn('LAX'); // re-record start-of-turn territories (airport now La Crosse's)
+  const heli = g._addUnit('heli', 'LAX', 'GUN');
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 5;
+  // GUN-LDT-LN-EAST is 3 spaces: nothing left to fly home -> not allowed
+  assert.equal(g.findPath([heli.id], 'GUN', 'EAST'), null);
+  // LN is 2 out, both bases are 2 back, only 1 space left -> not allowed
+  assert.equal(g.findPath([heli.id], 'GUN', 'LN'), null);
+  // LDT is 1 out, Gundersen 1 back -> allowed
+  assert.ok(g.findPath([heli.id], 'GUN', 'LDT'));
+});
+
+test('aircraft land only at their base, and noncombat cannot end until they have', () => {
+  const g = newGame();
+  g.s.territories.FI.owner = 'LAX';
+  g._startPlayerTurn('LAX');
+  const heli = g._addUnit('heli', 'LAX', 'GUN');
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 5;
+  assert.ok(g.move([heli.id], 'GUN', 'LDT').ok);
+  assert.equal(g.s.players.LAX.oil, 4);
+  skipTo(g, 'noncombatMove');
+  assert.equal(g.canEndPhase().ok, false, 'helicopter still in the air');
+  assert.match(g.canEndPhase().error, /Land your aircraft/);
+  assert.equal(g.findPath([heli.id], 'LDT', 'LN'), null, 'LN is not a base');
+  assert.ok(g.move([heli.id], 'LDT', 'GUN').ok, 'back to the Gundersen helipad');
+  assert.equal(g.s.players.LAX.oil, 4, 'no second oil charge this turn');
+  assert.ok(g.canEndPhase().ok);
+  g.endPhase();
+  assert.ok(g.s.units[heli.id], 'landed safely');
+});
+
+test('an airport captured this turn is not a landing site', () => {
+  const g = newGame();
+  skipTo(g, 'combatMove');
+  assert.deepEqual(g.landingSites('LAX', 'plane'), []);
+  assert.ok(g.move(ids(g, 'LDT', 'LAX', 'inf').slice(0, 1), 'LDT', 'FI').ok);
+  assert.equal(g.owner('FI'), 'LAX');
+  assert.deepEqual(g.landingSites('LAX', 'heli'), ['GUN'], 'Gundersen yes, the airport taken this turn no');
+});
+
+test('aircraft pay 1 oil to move in a turn, not per space', () => {
+  const g = newGame();
+  g.s.territories.FI.owner = 'LAX';
+  g._startPlayerTurn('LAX');
+  const heli = g._addUnit('heli', 'LAX', 'GUN');
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 0;
+  assert.equal(g.unitCanMove(heli), false, 'no oil, no flight');
+  g.s.players.LAX.oil = 1;
+  assert.ok(g.move([heli.id], 'GUN', 'FI').ok, 'two spaces (GUN-LDT-FI) to the airport for one oil');
+  assert.equal(g.s.players.LAX.oil, 0);
+});
+
+test('helicopter can carry one infantry farther than it could walk', () => {
+  const g = newGame();
+  g.s.territories.FI.owner = 'LAX';
+  g._startPlayerTurn('LAX');
+  const heli = g._addUnit('heli', 'LAX', 'GUN');
+  const inf = ids(g, 'GUN', 'LAX', 'inf')[0];
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 5;
+  assert.ok(g.move([heli.id, inf], 'GUN', 'FI').ok, 'GUN->LDT->FI is 2 spaces');
+  assert.equal(g.s.units[inf].at, 'FI');
+  assert.equal(g.s.players.LAX.oil, 4, 'carried infantry burns no oil');
+});
+
 test('land units cross the wall only at gates or breaches; aircraft fly over', () => {
   const g = newGame();
   skipTo(g, 'combatMove');
@@ -286,45 +356,6 @@ test('forced casualties need no choice', () => {
   assert.equal(g.casualtyChoiceNeeded('FI', 'LAX'), false);
   assert.equal(g.casualtyChoiceNeeded('FI', 'Z'), false);
   assert.equal(g.unitsAt('FI', 'LAX').length, 1);
-});
-
-test('aircraft crash if they do not end at a landing site', () => {
-  const g = newGame();
-  g.s.territories.FI.owner = 'LAX';
-  const heli = g._addUnit('heli', 'LAX', 'GUN');
-  skipTo(g, 'combatMove');
-  g.s.players.LAX.oil = 5;
-  assert.ok(g.move([heli.id], 'GUN', 'LN').ok);
-  skipTo(g, 'noncombatMove');
-  g.endPhase();
-  assert.equal(g.s.units[heli.id], undefined);
-});
-
-test('aircraft pay 1 oil to move in a turn, not per space, and only once per turn', () => {
-  const g = newGame();
-  g.s.territories.FI.owner = 'LAX';
-  const heli = g._addUnit('heli', 'LAX', 'GUN');
-  skipTo(g, 'combatMove');
-  g.s.players.LAX.oil = 0;
-  assert.equal(g.unitCanMove(heli), false, 'no oil, no flight');
-  assert.equal(g.move([heli.id], 'GUN', 'LN').ok, false);
-  g.s.players.LAX.oil = 1;
-  assert.ok(g.move([heli.id], 'GUN', 'LN').ok, 'two spaces for one oil');
-  assert.equal(g.s.players.LAX.oil, 0);
-  skipTo(g, 'noncombatMove');
-  assert.ok(g.move([heli.id], 'LN', 'LDT').ok, 'already fuelled this turn');
-  assert.equal(g.s.players.LAX.oil, 0);
-});
-
-test('helicopter can carry one infantry farther than it could walk', () => {
-  const g = newGame();
-  g.s.territories.FI.owner = 'LAX';
-  const heli = g._addUnit('heli', 'LAX', 'GUN');
-  const inf = ids(g, 'GUN', 'LAX', 'inf')[0];
-  skipTo(g, 'combatMove');
-  g.s.players.LAX.oil = 5;
-  assert.ok(g.move([heli.id, inf], 'GUN', 'ODT').ok, 'GUN->LDT->LN->ODT is 3 spaces');
-  assert.equal(g.s.players.LAX.oil, 4, 'carried infantry burns no oil');
 });
 
 test('victory requires holding every inside territory for a full round', () => {

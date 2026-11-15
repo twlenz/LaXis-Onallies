@@ -189,7 +189,30 @@
     special(tag) { return this.map.territories.filter(t => (t.special || []).includes(tag)).map(t => t.id); }
     cityHall(p) { return this.map.cityHalls[p]; }
     airportControlled(p) { return this.special('airport').some(t => this.controls(p, t)); }
+    /**
+     * Where an aircraft may end the turn: its base (the Airport; Gundersen too for the
+     * helicopter), and only if that base was yours at the START of the turn (A&A: never land
+     * where you captured this turn).
+     */
     landingSites(p, type) {
+      const start = this.s.startFriendly && this.s.current === p ? new Set(this.s.startFriendly) : null;
+      return this.airBases(p, type).filter(t => !start || start.has(t));
+    }
+    /** Fewest spaces an aircraft needs from `from` to reach a landing site (air ignores terrain). */
+    airDistanceToLanding(p, type, from) {
+      const sites = new Set(this.landingSites(p, type));
+      if (!sites.size) return Infinity;
+      const dist = { [from]: 0 };
+      const q = [from];
+      while (q.length) {
+        const c = q.shift();
+        if (sites.has(c)) return dist[c];
+        for (const n of this.adj[c]) if (!(n in dist)) { dist[n] = dist[c] + 1; q.push(n); }
+      }
+      return Infinity;
+    }
+    /** Where new aircraft are placed: the Airport (and Gundersen for the helicopter). */
+    airBases(p, type) {
       const tags = UNITS[type].landsAt || [];
       const out = [];
       for (const tag of tags) for (const t of this.special(tag)) {
@@ -343,10 +366,8 @@
         if (!combat && this.hostileTo(p, tid)) return false;
         if (!combat && !g.flying && this.owner(tid) !== p) return false;
         if (!combat && g.flying && g.cargo.length && this.owner(tid) !== p) return false;
-        if (!combat && g.flying && !g.cargo.length) {
-          // air may end noncombat anywhere friendly (it must still reach a landing site)
-          if (this.owner(tid) !== p) return false;
-        }
+        // aircraft must finish noncombat move on a landing site
+        if (!combat && g.air.some(u => !this.landingSites(p, u.type).includes(tid))) return false;
         return true;
       };
       const passOk = (tid) => {
@@ -386,7 +407,15 @@
         cur = cands[0];
         path.unshift(cur);
       }
-      return { path, cost: path.length - 1 };
+      const cost = path.length - 1;
+      // A&A: an aircraft may only fly into combat if it can still get back to a landing site
+      if (combat) {
+        for (const u of g.air) {
+          const left = UNITS[u.type].move - u.moved - cost;
+          if (this.airDistanceToLanding(p, u.type, to) > left) return null;
+        }
+      }
+      return { path, cost };
     }
 
     reachable(unitIds, from) {
@@ -699,6 +728,13 @@
         const open = s.battles.filter(b => !b.done);
         if (open.length) return fail(`Resolve every battle first: ${open.map(b => this.T[b.tid].name).join(', ')}.`);
       }
+      if (s.phase === 'noncombatMove') {
+        const p = s.current;
+        const unlanded = Object.values(s.units).filter(u => u.owner === p && UNITS[u.type].air && u.moved > 0 &&
+          !this.landingSites(p, u.type).includes(u.at) &&
+          this.landingSites(p, u.type).some(site => this.findPath([u.id], u.at, site)));
+        if (unlanded.length) return fail(`Land your aircraft first: ${unlanded.map(u => `${UNITS[u.type].name} in ${this.T[u.at].name}`).join(', ')}.`);
+      }
       return ok();
     }
 
@@ -754,6 +790,8 @@
       for (const u of Object.values(s.units)) {
         if (u.owner === p) { u.moved = 0; u.combatMoved = false; u.oilPaid = false; u.origin = null; }
       }
+      // territories friendly at the start of the turn: the only places aircraft may land
+      s.startFriendly = this.map.territories.map(t => t.id).filter(t => this.controls(p, t));
       const pl = s.players[p];
       if (pl.holding) {
         if (this.meetsVictory(p)) {
@@ -776,7 +814,7 @@
       for (const u of Object.values(s.units)) {
         if (u.owner !== p || !UNITS[u.type].air || u.moved === 0) continue;
         if (!this.landingSites(p, u.type).includes(u.at)) {
-          this.log(`${UNITS[u.type].name} could not reach a landing site and crashed.`, 'combat');
+          this.log(`${UNITS[u.type].name} could not land and crashed.`, 'combat');
           this._removeUnit(u.id);
         }
       }
@@ -786,7 +824,7 @@
         const def = UNITS[type];
         let where = null;
         if (def.air) {
-          const sites = this.landingSites(p, type);
+          const sites = this.airBases(p, type);
           where = (type === 'heli' && sites.find(t => (this.T[t].special || []).includes('gundersen'))) || sites[0] || null;
         } else if (this.controls(p, this.cityHall(p))) {
           where = this.cityHall(p);

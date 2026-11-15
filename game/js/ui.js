@@ -475,8 +475,8 @@
       case 'combatMove':
       case 'noncombatMove':
         h += `<h2>${game.phaseName()}</h2><p class="help">${s.phase === 'combatMove'
-          ? 'Click one of your territories, choose units, then click a highlighted destination. Moving into zombies or enemy units starts a battle. Moving into an empty territory captures it. Land units can only leave or enter the city through a highway gate (gold wall piece) or a breach. Units that stay put can fire from the wall.'
-          : 'Units that did not move or fight may move into friendly territory. Aircraft that flew must end on a landing site (Airport; Gundersen for the helicopter), or they crash.'}</p>`;
+          ? 'Aircraft can only fly where they can still get back to base with the movement they have left. Click one of your territories, choose units, then click a highlighted destination. Moving into zombies or enemy units starts a battle. Moving into an empty territory captures it. Land units can only leave or enter the city through a highway gate (gold wall piece) or a breach. Units that stay put can fire from the wall.'
+          : 'Units that did not move or fight may move into friendly territory. Aircraft must land back at the Airport (the helicopter may also use Gundersen) before you can end the turn.'}</p>`;
         h += moveCard();
         break;
       case 'combat':
@@ -551,14 +551,14 @@
   function landingNote(type, left) {
     const p = game.s.current;
     const sites = game.landingSites(p, type);
-    if (!sites.length) return `<br><small class="warn">No landing site under your control!</small>`;
+    if (!sites.length) return `<br><small class="warn">No base to land at!</small>`;
     const dist = { [sel.tid]: 0 };
     const q = [sel.tid];
     while (q.length) { const c = q.shift(); for (const n of game.adj[c]) if (!(n in dist)) { dist[n] = dist[c] + 1; q.push(n); } }
     const best = sites.reduce((a, b) => (dist[b] < dist[a] ? b : a));
     const d = dist[best];
     const ok = d <= left;
-    return `<br><small class="${ok ? 'help' : 'warn'}">Nearest landing: ${escapeHtml(game.T[best].short || game.T[best].name)}, ${d === 0 ? 'here' : d + ' space' + (d === 1 ? '' : 's') + ' away'}${ok ? '' : ': it cannot make it back this turn'}</small>`;
+    return `<br><small class="${ok ? 'help' : 'warn'}">Nearest landing (${type === 'heli' ? 'Airport or Gundersen' : 'Airport'}): ${escapeHtml(game.T[best].short || game.T[best].name)}, ${d === 0 ? 'here' : d + ' space' + (d === 1 ? '' : 's') + ' away'}${ok ? '' : ': it cannot make it back this turn'}</small>`;
   }
   function moveCard() {
     if (!sel) return '<p class="help"><i>No territory selected.</i></p>';

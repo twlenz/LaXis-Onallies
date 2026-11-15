@@ -147,7 +147,9 @@
       if (!UNITS[u.type].air || !g.unitCanMove(u)) continue;
       const sites = g.landingSites(p, u.type);
       if (sites.includes(u.at)) continue;
-      for (const site of sites) { const r = g.move([u.id], u.at, site); if (r.ok) return r; }
+      // nearest friendly-at-start territory it can reach
+      const reach = sites.map(site => ({ site, path: g.findPath([u.id], u.at, site) })).filter(x => x.path).sort((a, b) => a.path.cost - b.path.cost);
+      for (const { site } of reach) { const r = g.move([u.id], u.at, site); if (r.ok) return r; }
     }
     // reinforce threatened territories
     const mine = g.map.territories.filter(t => g.controls(p, t.id));

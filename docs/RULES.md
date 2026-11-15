@@ -117,7 +117,9 @@ Combat uses the Axis & Allies system: a unit **hits on a d6 roll equal to or bel
 - You can **buy** your aircraft only while you **control the Airport**. Each side may have **at most one** aircraft at a time; if yours is destroyed, you may buy another.
 - You can **fly** your aircraft only while you control the Airport. If you lose the Airport, your aircraft is **grounded**: it cannot move, but it still defends.
 - New aircraft are placed at their landing site (the helicopter goes to Gundersen if you control it, otherwise to the Airport).
-- At the end of your Noncombat Move, any aircraft that moved this turn and is **not on a landing site you control is destroyed** (it crashed). Landing sites are the **Airport** for both aircraft, plus **Gundersen** for the helicopter.
+- **Landing sites:** the **Airport** for both aircraft, plus **Gundersen** for the helicopter. A landing site must have been yours **at the start of your turn**, so you can't land at an Airport you captured this turn.
+- **Plan the trip home:** in combat move, an aircraft may only fly somewhere it can still get back to a landing site with the movement it has left (Axis & Allies rule).
+- **Land before you finish:** you can't end Noncombat Move while an aircraft that flew this turn is off its landing site and could still reach one. If it truly cannot reach one (for example, it was stranded by a lost battle), it crashes when your turn ends.
 - Aircraft cannot capture territory. Aircraft may fly over anything, including water, enemies and zombies.
 - **Helicopter transport:** the helicopter may carry **one infantry** that has not moved this turn. Both move together using the helicopter's movement, and the infantry is dropped where the helicopter ends.
 
