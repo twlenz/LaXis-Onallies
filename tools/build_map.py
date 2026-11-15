@@ -518,9 +518,13 @@ def main():
         t = which(p) or min(ids, key=lambda x: terr[x]["geom"].distance(p))
         if terr[t]["geom"].distance(p) > 0.6:
             continue
-        kts.append(dict(p=p, tid=t, name=f'{r["Store Name"].title()} – {r["Address"].title()}, {r["City"].title()}'))
+        yes = lambda k: 1 if r.get(k) == "Yes" else 0
+        score = yes("Sells Diesel") + yes("Sells DEF") + yes("Car Wash") + yes("Sells E85") + 2 * max(yes("Sells CNG"), yes("Sells LNG"))
+        kts.append(dict(p=p, tid=t, score=score, name=f'{r["Store Name"].title()} – {r["Address"].title()}, {r["City"].title()}'))
     for t in ids:
         terr[t]["kwikTrips"] = sum(1 for k in kts if k["tid"] == t)
+        big = any(k["score"] >= C.OIL_MIN_SCORE for k in kts if k["tid"] == t)
+        terr[t]["oil"] = 1 if big or t in C.OIL_BALANCE else 0
 
     # ---------------------------------------------------------------- output
     out_t = []
@@ -536,7 +540,7 @@ def main():
         out_t.append(dict(
             id=t, name=T["name"], short=T.get("short", T["name"]), group=T["group"],
             region={"LAX": "La Crosse", "ONA": "Onalaska", "FI": "French Island", "OUT": "Outside"}[T["group"]],
-            inside=T["inside"], ring=T.get("ring", 0), value=T.get("value", 0), kwikTrips=T["kwikTrips"],
+            inside=T["inside"], ring=T.get("ring", 0), value=T.get("value", 0), kwikTrips=T["kwikTrips"], oil=T["oil"],
             special=T.get("special", []), spawn=T.get("spawn"), startOwner=so, startUnits=start,
             adj=sorted(adj[t]), zombieNext=T["zombieNext"], label=[round(lab.x, 1), round(lab.y, 1)],
             area=round(gs.area), path=path_d(gs), roads=T.get("roads", [])))
@@ -568,7 +572,7 @@ def main():
     kt_out = []
     for k in kts:
         sp = to_svg(k["p"])
-        kt_out.append(dict(x=round(sp.x, 1), y=round(sp.y, 1), name=k["name"], tid=k["tid"]))
+        kt_out.append(dict(x=round(sp.x, 1), y=round(sp.y, 1), name=k["name"], tid=k["tid"], score=k["score"]))
     br_out = [dict(a=b["a"], b=b["b"], name=b["name"], path=line_d(to_svg(b["geom"]))) for b in bridges]
     mapdata = dict(
         viewBox=[0, 0, round(SVG_W, 1), round(SVG_H, 1)],

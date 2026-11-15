@@ -54,7 +54,7 @@ r3_3               OUT r3 v0 kt2 sp3 West Salem                         next=r2_
 r3_4               OUT r3 v0 kt0 sp4 Barre Mills                        next=r2_5 adj=r2_5,r2_6,r3_3,r3_5
 r3_5               OUT r3 v0 kt0 sp5 St. Joseph Ridge                   next=r2_6 adj=r2_6,r2_7,r3_4,r3_6
 r3_6               OUT r3 v0 kt0 sp6 Chipmunk Coulee                    next=r2_8 adj=r2_7,r2_8,r3_5
-w_mnbluffs         OUT r3 v0 kt0 sp- Minnesota Bluffs                   next=w_lacrescent adj=w_lacrescent
+w_mnbluffs         OUT r3 v0 kt0 sp7 Minnesota Bluffs                   next=w_lacrescent adj=w_lacrescent
 W1   lax_bluff|r1_7                 
 W2   lax_bluff|r1_8                 
 W3   lax_downtown|w_pettibone       GATE State Hwy 16, US Hwy 14, US Hwy 61, US-14/61 (Cass St)

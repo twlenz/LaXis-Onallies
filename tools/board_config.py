@@ -121,7 +121,7 @@ PLACES = [
 WEST = [
     dict(id="w_pettibone", name="Pettibone Park (Barron Island)", short="Pettibone", ring=1, value=1),
     dict(id="w_lacrescent", name="La Crescent, MN", short="La Crescent", ring=2, value=2, radius_km=(0, 2.8)),
-    dict(id="w_mnbluffs", name="Minnesota Bluffs", short="MN Bluffs", ring=3, value=0, radius_km=(2.8, 6.5)),
+    dict(id="w_mnbluffs", name="Minnesota Bluffs", short="MN Bluffs", ring=3, value=0, radius_km=(2.8, 6.5), spawn=7),
 ]
 CASS_STREET_BRIDGE = ((43.8130, -91.2585), (43.8150, -91.2635))
 PETTIBONE_LACRESCENT_BRIDGE = ((43.8190, -91.2765), (43.8230, -91.2990))
@@ -136,3 +136,11 @@ DOODLES = [
     ("zombiehand", (43.9800, -91.1500)),
     ("zombiehand", (43.7250, -91.1000)),
 ]
+
+# --- Oil -----------------------------------------------------------------------------------
+# Only territories with one of the area's biggest Kwik Trips give oil (1 per territory per turn).
+# "Biggest" = most amenities in Kwik Trip's store list (diesel, DEF, car wash, E85; CNG/LNG x2).
+OIL_MIN_SCORE = 3
+# Onalaska has only one top-tier station, so its next two largest (Sand Lake Rd, State Road 16)
+# also count, to keep the two cities' oil even (3 each).
+OIL_BALANCE = ["ona_menards", "ona_theater"]

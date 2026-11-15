@@ -10,10 +10,11 @@
 
 ## 1. Object of the game
 
-**Win** by controlling **every territory inside the wall**, meaning every neighborhood of La Crosse, Onalaska and French Island, with **no zombies anywhere inside the wall**, and by **holding that for a full round**.
+**Win** by controlling **every territory inside the wall**, meaning every neighborhood of La Crosse, Onalaska and French Island, with **no zombies anywhere inside the wall**, and by **holding that for two full rounds**.
 
-- If you meet this condition at the end of your turn, announce "**The cities are ours.**"
-- If you still meet it at the start of your next turn, after your opponent's turn and the zombie turn have passed, **you win**.
+- If you meet this condition at the end of your turn, announce "**The cities are ours.**" and put out the Holding marker.
+- At the start of each of your next turns, check again. If you still meet it, advance the marker: **1 of 2** at the first check, and at the second **you win**.
+- If you ever stop meeting it (a territory lost, or a zombie inside the wall), the count resets and you must take the cities back and start over.
 
 Territories **outside the wall** (Holmen, Brice Prairie, the southern bluffs, etc.) give income but are **not** needed to win.
 
@@ -41,12 +42,12 @@ Stacks of identical units can be marked with "×5" chips, as in Axis & Allies.
 - **Outside the wall**: three **rings** of territories surround the cities on the north, east and south sides.
   - **Ring 1** touches the wall.
   - **Ring 2** is the middle ring. It includes **Holmen** (worth 3).
-  - **Ring 3** is the outer ring. Its six territories are the **zombie outskirts**, where new zombies appear.
+  - **Ring 3** is the outer ring. Its six territories are **zombie outskirts**, where new zombies appear.
   - Rings 1 and 2 are worth income, but they are exposed to the horde.
-- **West of the river** is a three-territory spoke across the **Cass Street bridge**: **Pettibone Park** (ring 1), **La Crescent, MN** (ring 2) and the **Minnesota Bluffs** (ring 3). Zombies do not spawn in the west, but zombies that end up there still march inward.
+- **West of the river** is a three-territory spoke across the **Cass Street bridge**: **Pettibone Park** (ring 1), **La Crescent, MN** (ring 2) and the **Minnesota Bluffs** (ring 3). The Minnesota Bluffs are a **seventh zombie outskirt**: zombies spawning there march through La Crescent and Pettibone to the Cass Street gate.
 - Each territory shows:
   - its **income value** (Supply Points, SP),
-  - **oil** equal to the number of **Kwik Trip** gas stations in it (each one gives **1 oil** per turn),
+  - an **oil barrel** if it has one of the area's **biggest Kwik Trips** (worth **1 oil** per turn). Only 9 territories have one: La Crosse's Grand Crossing, Washburn and Hintgen; Onalaska's North End, Menards and Theater Road; and Holmen, Brice Prairie and West Salem outside the wall.
   - a **zombie arrow** showing where automatic zombies move next.
 - **The wall** runs along every border between an inside territory and an outside territory. Each numbered segment is a narrow slot holding one wooden wall piece (**W1, W2, …**). **There is no wall between La Crosse and Onalaska.** The Mississippi needs no wall, because zombies cannot cross open water.
 - **Highway gates** (gold wall pieces) are the wall segments where a major highway leaves the city:
@@ -105,7 +106,7 @@ Combat uses the Axis & Allies system: a unit **hits on a d6 roll equal to or bel
 ### Oil
 - **Tanks, the helicopter and the plane** each cost **1 oil** the first time they move in a turn, in either move phase. It's 1 oil to move at all, not 1 per space, and an aircraft that flies out in combat move and back in noncombat move pays only once. Infantry carried by the helicopter cost nothing.
 - Units without oil stay put. They still defend, and tanks can still fire from the wall.
-- At **Collect Income**, gain **1 oil for each Kwik Trip** in territories you control.
+- At **Collect Income**, gain **1 oil for each oil territory (barrel) you control**.
 
 ### Tank movement and blitzing
 - A tank moves up to **2 spaces**. It may take them as **separate steps** in the same move phase: move one space, do other things, then move it one more.
@@ -169,7 +170,7 @@ During the zombie turn, zombies that enter a territory with player units attack 
 ## 9. The zombie turn
 
 1. **Shamble**: move every zombie stack (see below).
-2. **Spawn**: at **each of the six zombie outskirts, separately**, roll **round ÷ 2 dice, rounded up** (round 1: 1 die each; round 3: 2 dice each; round 6: 3 dice each …). **Each 6 is one new zombie in that outskirt.** New zombies do not move until the next zombie turn.
+2. **Spawn**: at **each of the seven zombie outskirts (the six outer-ring territories and the Minnesota Bluffs), separately**, roll **round ÷ 2 dice, rounded up** (round 1: 1 die each; round 3: 2 dice each; round 6: 3 dice each …). **Each 6 is one new zombie in that outskirt.** New zombies do not move until the next zombie turn.
 3. **Feast**: resolve every battle where zombies share a territory with player units (§8).
 
 ### Automatic zombies (while both players are alive)
@@ -213,7 +214,7 @@ WALL:   arrive → next zombie turn smash → next zombie turn enter.  Never reb
         Fortified (didn't move) units fire once per turn at Defense value, no return fire.
 RINGS:  zombies march ring 3 → ring 2 → ring 1 → wall → toward downtown, one step per turn.
 RISE:   units you lose when zombies beat you, or when you attack zombies and lose or retreat.
-WIN:    own every inside territory, zero zombies inside, at end of your turn AND start of your next.
+WIN:    own every inside territory, zero zombies inside, at the end of your turn, then still at the start of your next TWO turns.
 LOSE:   end your turn without your City Hall (or with no land units). Then you run the horde.
 ```
 
@@ -225,8 +226,8 @@ These rules were set from the designer's brief. The choices below were filled in
 - **Tank crews rise as zombies** like infantry. Aircraft never rise.
 - **Defeated players' surviving units become zombies.** This gives the new zombie commander a real force.
 - **One aircraft per side**, and both need the Airport to buy or fly.
-- **Spawning is per outskirt.** In round 1 the six outskirts produce one zombie between them on average; by round 10 it's five per round. If early rounds feel too calm, use the Outbreak variant (§4).
+- **Spawning is per outskirt.** In round 1 the seven outskirts produce about one zombie between them on average; by round 10 it's about six per round. If early rounds feel too calm, use the Outbreak variant (§4).
 - **Breaches count as openings for both sides.** Once zombies tear down a segment, your land units can also move through the gap.
 - **The I-90 bridge from French Island to Minnesota is out.** The only way west is the Cass Street bridge.
-- **Only Kwik Trip stations that sell gas count as oil.** Kwik Trip's La Crosse campus (distribution center, kitchen, support offices) does not.
+- **Oil comes only from the biggest Kwik Trips**, ranked by amenities in Kwik Trip's store list (diesel, DEF, car wash, E85, CNG/LNG). Onalaska has only one top-tier station, so its next two largest also count, to keep the cities even at 3 oil each. The corporate campus doesn't count. Kwik Trip's La Crosse campus (distribution center, kitchen, support offices) does not.
 - **The board is stretched.** The city core gets more space than the countryside, so pieces fit. Shorelines and city outlines are simplified, and neighborhood borders are approximate.

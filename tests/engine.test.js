@@ -442,17 +442,39 @@ test('forced casualties need no choice', () => {
   assert.equal(g.unitsAt('FI', 'LAX').length, 1);
 });
 
-test('victory requires holding every inside territory for a full round', () => {
+test('victory requires holding every inside territory for two full rounds', () => {
+  const g = newGame();
+  for (const tid of g.insideIds()) g.s.territories[tid].owner = 'LAX';
+  for (const u of Object.values(g.s.units)) if (u.owner === 'ONA') u.at = 'HOL';
+  skipTo(g, 'noncombatMove');
+  g.endPhase(); // end of round-1 turn: takes hold
+  assert.equal(g.s.players.LAX.holding, true);
+  assert.equal(g.s.players.LAX.held, 0);
+  rig(g, Array(200).fill(1)); // quiet spawn dice
+  const runTo = (round) => { while (!g.s.winner && !(g.s.round === round && g.s.current === 'LAX')) g.endPhase(); };
+  runTo(2);
+  assert.equal(g.s.winner, null, 'one round held is not enough');
+  assert.equal(g.s.players.LAX.held, 1);
+  runTo(3);
+  assert.equal(g.s.winner, 'LAX', 'two full rounds held');
+});
+
+test('losing the hold resets the count', () => {
   const g = newGame();
   for (const tid of g.insideIds()) g.s.territories[tid].owner = 'LAX';
   for (const u of Object.values(g.s.units)) if (u.owner === 'ONA') u.at = 'HOL';
   skipTo(g, 'noncombatMove');
   g.endPhase();
-  assert.equal(g.s.players.LAX.holding, true);
+  rig(g, Array(200).fill(1));
+  while (!(g.s.round === 2 && g.s.current === 'LAX')) g.endPhase();
+  assert.equal(g.s.players.LAX.held, 1);
+  // a zombie slips inside before La Crosse's next turn
+  skipTo(g, 'noncombatMove'); g.endPhase();
+  g._addUnit('zombie', 'Z', 'FI');
+  while (!(g.s.round === 3 && g.s.current === 'LAX')) g.endPhase();
   assert.equal(g.s.winner, null);
-  rig(g, Array(40).fill(1));
-  while (!g.s.winner && g.s.round < 3) g.endPhase();
-  assert.equal(g.s.winner, 'LAX');
+  assert.equal(g.s.players.LAX.holding, false);
+  assert.equal(g.s.players.LAX.held, 0);
 });
 
 test('losing your City Hall defeats you and hands you the horde', () => {

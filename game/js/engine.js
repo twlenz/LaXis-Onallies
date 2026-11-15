@@ -41,6 +41,7 @@
     fortifiedStat: 'def', // value used when firing over a wall ('att' or 'def')
     startingOutbreak: false, // place 1 zombie on each spawn point before round 1
     startOil: 2,
+    holdRounds: 2, // full rounds the cities must be held to win
     defeatedUnitsBecomeZombies: true,
   };
 
@@ -110,7 +111,7 @@
         snapshot: null,
       };
       for (const p of PLAYERS) {
-        s.players[p] = { sp: 0, oil: rules.startOil, defeated: false, holding: false };
+        s.players[p] = { sp: 0, oil: rules.startOil, defeated: false, holding: false, held: 0 };
       }
       const g = new Game(map, s);
       for (const t of map.territories) {
@@ -232,10 +233,13 @@
     income(p) {
       let sp = 0, oil = 0;
       for (const t of this.map.territories) {
-        if (this.controls(p, t.id)) { sp += t.value || 0; oil += t.kwikTrips || 0; }
+        // 1 oil per oil territory (one of the area's biggest Kwik Trips)
+        if (this.controls(p, t.id)) { sp += t.value || 0; oil += t.oil != null ? t.oil : (t.kwikTrips ? 1 : 0); }
       }
       return { sp, oil };
     }
+
+    holdRounds() { return this.s.rules.holdRounds || 2; }
 
     meetsVictory(p) {
       return this.insideIds().every(tid => this.owner(tid) === p && !this.hasZombies(tid));
@@ -834,14 +838,21 @@
       s.startFriendly = this.map.territories.map(t => t.id).filter(t => this.controls(p, t));
       const pl = s.players[p];
       if (pl.holding) {
+        const need = this.holdRounds();
         if (this.meetsVictory(p)) {
-          s.winner = p;
-          s.phase = 'gameOver';
-          this.log(`${SIDE[p].name} has held every neighborhood of La Crosse and Onalaska for a full round. ${SIDE[p].name} WINS!`, 'win');
-          return;
+          pl.held = (pl.held || 0) + 1;
+          if (pl.held >= need) {
+            s.winner = p;
+            s.phase = 'gameOver';
+            this.log(`${SIDE[p].name} has held every neighborhood of La Crosse and Onalaska for ${need} full round${need === 1 ? '' : 's'}. ${SIDE[p].name} WINS!`, 'win');
+            return;
+          }
+          this.log(`${SIDE[p].name} has held the cities for ${pl.held} of ${need} rounds.`, 'win');
+        } else {
+          pl.holding = false;
+          pl.held = 0;
+          this.log(`${SIDE[p].name} lost its grip on the cities.`);
         }
-        pl.holding = false;
-        this.log(`${SIDE[p].name} lost its grip on the cities.`);
       }
       this.takeSnapshot();
       this.log(`— ${SIDE[p].name}'s turn (round ${s.round}) —`, 'turn');
@@ -889,8 +900,14 @@
       if (!this.controls(p, this.cityHall(p)) || landUnits.length === 0) {
         this._defeat(p);
       } else if (this.meetsVictory(p)) {
-        s.players[p].holding = true;
-        this.log(`${SIDE[p].name} controls every neighborhood! Hold until your next turn to win.`, 'win');
+        if (!s.players[p].holding) {
+          s.players[p].holding = true;
+          s.players[p].held = 0;
+          this.log(`${SIDE[p].name} controls every neighborhood! Hold for ${this.holdRounds()} full rounds to win.`, 'win');
+        }
+      } else if (s.players[p].holding) {
+        s.players[p].holding = false;
+        s.players[p].held = 0;
       }
       if (s.winner) return;
       // next

@@ -31,7 +31,7 @@ test('special territories and spawn points', () => {
   assert.equal(MAP.territories.filter(t => t.special.includes('airport')).length, 1);
   assert.equal(MAP.territories.filter(t => t.special.includes('gundersen')).length, 1);
   const spawns = MAP.territories.filter(t => t.spawn).map(t => t.spawn).sort();
-  assert.deepEqual(spawns, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(spawns, [1, 2, 3, 4, 5, 6, 7], 'six outer-ring outskirts plus the Minnesota Bluffs');
   for (const t of MAP.territories.filter(x => x.spawn)) assert.equal(t.inside, false);
 });
 

@@ -107,9 +107,9 @@
       const [x, y] = t.label;
       const name = el('text', { x, y: y - 14, class: 'tlabel' }, layers.labels);
       name.textContent = t.short || t.name;
-      if (window.LaxisArt && (t.value || t.kwikTrips)) {
+      if (window.LaxisArt && (t.value || t.oil)) {
         const row = el('g', { transform: `translate(${x},${y}) scale(1.35)` }, layers.labels);
-        row.innerHTML = window.LaxisArt.badgeRow(t.value, t.kwikTrips, 7).svg;
+        row.innerHTML = window.LaxisArt.badgeRow(t.value, t.oil ? 1 : 0, 7).svg;
       }
       for (const sp of t.special || []) {
         const icon = { cityhall: '★', airport: '✈', gundersen: '✚' }[sp];
@@ -123,10 +123,32 @@
   function valueText(t) {
     const parts = [];
     if (t.value) parts.push(`worth ${t.value}`);
-    if (t.kwikTrips) parts.push(`${t.kwikTrips} oil`);
+    if (t.oil) parts.push('1 oil (big Kwik Trip)');
     return parts.join(' · ');
   }
   function setVB() { svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+  /** Glide the map so a territory is in the middle of the screen (zooming in if fully zoomed out). */
+  let vbAnim = 0;
+  function centerOn(tid) {
+    const t = game && game.T[tid];
+    if (!t) return;
+    const [cx, cy] = t.label;
+    const w = Math.min(vb.w, MAP.viewBox[2] * 0.55);
+    const h = vb.h * (w / vb.w);
+    const target = { x: cx - w / 2, y: cy - h / 2, w, h };
+    const from = Object.assign({}, vb);
+    const t0 = performance.now();
+    const ms = stepDelay() === 0 ? 1 : 380;
+    cancelAnimationFrame(vbAnim);
+    const frame = (now) => {
+      const k = Math.min(1, (now - t0) / ms);
+      const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      for (const key of ['x', 'y', 'w', 'h']) vb[key] = from[key] + (target[key] - from[key]) * e;
+      setVB();
+      if (k < 1) vbAnim = requestAnimationFrame(frame);
+    };
+    vbAnim = requestAnimationFrame(frame);
+  }
 
   function attachPanZoom() {
     let drag = null;
@@ -434,7 +456,7 @@
       const pl = s.players[p];
       const inc = game.income(p);
       h += `<div class="stat ${p} ${pl.defeated ? 'dead' : ''}"><small>${SIDE[p].name}${cpu[p] ? ' (CPU)' : ''}</small>
-        <b>${pl.sp} SP · ${pl.oil} oil</b><small>income +${inc.sp} SP, +${inc.oil} oil${pl.holding ? ' · <b style="color:var(--accent)">HOLDING!</b>' : ''}</small></div>`;
+        <b>${pl.sp} SP · ${pl.oil} oil</b><small>income +${inc.sp} SP, +${inc.oil} oil${pl.holding ? ` · <b style="color:var(--accent)">HOLDING ${pl.held || 0}/${game.holdRounds()}</b>` : ''}</small></div>`;
     }
     h += '</div>';
     const zc = Object.values(s.units).filter(u => u.owner === Z).length;
@@ -697,6 +719,7 @@
     side.querySelectorAll('[data-roll]').forEach(b => b.onclick = () => {
       const tid = b.dataset.roll;
       focusBattle = tid;
+      centerOn(tid);
       casDraft = {};
       const res = game.battleRoll(tid);
       if (res.ok) for (const pc of game.pendingCasualtyChoices()) if (pc.tid === tid && cpu[pc.side]) game.autoChooseCasualties(tid, pc.side);
@@ -718,7 +741,7 @@
       act(res);
       if (res.ok) scheduleCpu();
     });
-    side.querySelectorAll('[data-auto]').forEach(b => b.onclick = () => { focusBattle = b.dataset.auto; act(game.autoResolve(b.dataset.auto)); });
+    side.querySelectorAll('[data-auto]').forEach(b => b.onclick = () => { focusBattle = b.dataset.auto; centerOn(b.dataset.auto); act(game.autoResolve(b.dataset.auto)); });
     side.querySelectorAll('[data-retreat]').forEach(b => b.onclick = () => {
       const before = positions();
       const res = game.retreat(b.dataset.retreat, b.dataset.to);
@@ -728,7 +751,7 @@
     side.querySelectorAll('[data-smash]').forEach(b => b.onclick = () => { act(game.zombieSmash(sel.tid, b.dataset.smash)); selectTerritory(sel.tid); render(); });
     side.querySelectorAll('[data-focus]').forEach(c => c.onclick = (ev) => {
       if (ev.target.tagName === 'BUTTON' || ev.target.tagName === 'SELECT') return;
-      focusBattle = c.dataset.focus; render();
+      focusBattle = c.dataset.focus; centerOn(c.dataset.focus); render();
     });
   }
 
@@ -830,7 +853,9 @@
   // ---------------------------------------------------------- phase buttons
   function endPhase() {
     const before = positions();
+    const wasFeast = game.s.phase === 'zombieCombat';
     const res = game.endPhase();
+    if (res.ok && wasFeast && game.s.zombieReport && game.s.zombieReport.battles.length) centerOn(game.s.zombieReport.battles[0].tid);
     sel = null; reach = []; focusBattle = null;
     act(res);
     const moves = res.ok ? diffMoves(before) : [];
@@ -853,14 +878,14 @@
     if (!isCpuTurn()) return;
     const before = positions();
     const phase = game.s.phase;
-    const rounds = Object.fromEntries((game.s.battles || []).map(b => [b.tid, b.round]));
+    const rounds = Object.fromEntries((game.s.battles || []).flatMap(b => [[b.tid, b.round], ['p:' + b.tid, !!b.pending]]));
     const res = AI.step(game, { isCpu: (sd) => sd === Z || !!cpu[sd] });
     if (res && res.waiting) { render(); return; } // a human is choosing casualties
     save();
     const d = stepDelay();
     // keep the battle being fought in view
-    const fought = (game.s.battles || []).find(b => b.round !== rounds[b.tid]);
-    if (fought) focusBattle = fought.tid;
+    const fought = (game.s.battles || []).find(b => b.round !== rounds[b.tid] || (b.pending && !rounds['p:' + b.tid]));
+    if (fought) { focusBattle = fought.tid; centerOn(fought.tid); }
     else if (game.s.phase !== 'combat') focusBattle = null;
     const moves = diffMoves(before);
     if (moves.length && d > 0) {
@@ -880,7 +905,7 @@
     $('overTitle').textContent = w === Z ? 'The dead win.' : `${SIDE[w].name} wins!`;
     $('overText').textContent = w === Z
       ? 'Both cities have fallen. The Coulee Region belongs to the horde.'
-      : `${SIDE[w].name} held every neighborhood of La Crosse and Onalaska, zombie-free, for a full round.`;
+      : `${SIDE[w].name} held every neighborhood of La Crosse and Onalaska, zombie-free, for ${game.holdRounds()} full rounds.`;
     $('overDlg').showModal();
   }
   function startNew() {
