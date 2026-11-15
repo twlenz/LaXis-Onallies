@@ -492,22 +492,114 @@
       return sorted.slice(0, hits);
     }
 
-    /** One round of a battle. order: optional casualty priority for the active player. */
+    /** One round of a battle with automatic (cheapest-first) casualties for both sides. */
     battleRound(tid, order) {
-      if (this.s.phase !== 'combat') return fail('Not in combat.');
-      const b = this.s.battles.find(x => x.tid === tid && !x.done);
-      if (!b) return fail('No battle there.');
-      const res = this._round(b, order, null);
-      this._checkBattleEnd(b);
-      return ok(res);
+      const r = this.battleRoll(tid);
+      if (!r.ok) return r;
+      const b = this.s.battles.find(x => x.tid === tid);
+      if (b.pending) {
+        for (const side of [b.attacker, b.defender]) if (this.casualtyChoiceNeeded(tid, side)) this.autoChooseCasualties(tid, side, side === b.attacker ? order : null);
+      }
+      return ok(b.last);
     }
 
     autoResolve(tid, order) {
       const b = this.s.battles.find(x => x.tid === tid && !x.done);
       if (!b) return fail('No battle there.');
+      if (b.pending) for (const side of [b.attacker, b.defender]) if (this.casualtyChoiceNeeded(tid, side)) this.autoChooseCasualties(tid, side);
       let guard = 0;
-      while (!b.done && guard++ < 200) { this._round(b, order, null); this._checkBattleEnd(b); }
+      while (!b.done && guard++ < 200) this.battleRound(tid, order);
       return ok();
+    }
+
+    // --- casualty choice (Axis & Allies: each side picks its own losses after the dice)
+    /**
+     * Roll one round. Hits are not removed yet: each side then picks its casualties with
+     * chooseCasualties() (forced picks, and zombies, are filled in automatically).
+     */
+    battleRoll(tid) {
+      if (this.s.phase !== 'combat') return fail('Not in combat.');
+      const b = this.s.battles.find(x => x.tid === tid && !x.done);
+      if (!b) return fail('No battle there.');
+      if (b.pending) return fail('Choose casualties for the last roll first.');
+      const att = this.unitsAt(b.tid, b.attacker);
+      const def = this.unitsAt(b.tid, b.defender);
+      const ar = this._rollSide(att, 'att');
+      const dr = this._rollSide(def, 'def');
+      const ah = ar.filter(r => r.hit).length;
+      const dh = dr.filter(r => r.hit).length;
+      b.pending = { att: ar, def: dr, hits: { [b.attacker]: Math.min(dh, att.length), [b.defender]: Math.min(ah, def.length) }, choice: {} };
+      this.log(`Battle at ${this.T[b.tid].name}, round ${b.round + 1}: ${SIDE[b.attacker].name} ${ah} hit(s), ${SIDE[b.defender].name} ${dh} hit(s).`, 'combat');
+      for (const side of [b.attacker, b.defender]) {
+        const units = this.unitsAt(b.tid, side);
+        const n = b.pending.hits[side];
+        const types = new Set(units.map(u => u.type));
+        if (n === 0 || n >= units.length || types.size < 2) b.pending.choice[side] = this._defaultCasualtyCounts(units, n);
+      }
+      this._maybeApplyCasualties(b);
+      return ok({ att: ar, def: dr });
+    }
+    /** Battle (if any) whose last roll still needs `side` to pick casualties. */
+    casualtyChoiceNeeded(tid, side) {
+      const b = this.s.battles.find(x => x.tid === tid && !x.done);
+      return !!(b && b.pending && (side === b.attacker || side === b.defender) && !b.pending.choice[side]);
+    }
+    pendingCasualtyChoices() {
+      const out = [];
+      for (const b of this.s.battles || []) {
+        if (b.done || !b.pending) continue;
+        for (const side of [b.attacker, b.defender]) if (!b.pending.choice[side]) out.push({ tid: b.tid, side, hits: b.pending.hits[side] });
+      }
+      return out;
+    }
+    _defaultCasualtyCounts(units, n, order) {
+      const c = {};
+      for (const u of this._takeCasualties(units, n, order)) c[u.type] = (c[u.type] || 0) + 1;
+      return c;
+    }
+    defaultCasualties(tid, side, order) {
+      const b = this.s.battles.find(x => x.tid === tid && !x.done);
+      if (!b || !b.pending) return {};
+      return this._defaultCasualtyCounts(this.unitsAt(tid, side), b.pending.hits[side], order);
+    }
+    /** counts: { unitType: number } adding up to the hits that side must take. */
+    chooseCasualties(tid, side, counts) {
+      const b = this.s.battles.find(x => x.tid === tid && !x.done);
+      if (!b || !b.pending) return fail('No casualties to choose there.');
+      if (b.pending.choice[side]) return fail('Casualties already chosen.');
+      const need = b.pending.hits[side];
+      const have = this.countBy(this.unitsAt(tid, side));
+      let total = 0;
+      for (const t in counts) {
+        const n = counts[t] | 0;
+        if (n < 0 || n > (have[t] || 0)) return fail(`You do not have ${n} ${UNITS[t] ? UNITS[t].name : t} there.`);
+        total += n;
+      }
+      if (total !== need) return fail(`Pick exactly ${need} casualt${need === 1 ? 'y' : 'ies'} (you picked ${total}).`);
+      b.pending.choice[side] = Object.fromEntries(Object.entries(counts).filter(([, n]) => n > 0));
+      this._maybeApplyCasualties(b);
+      return ok();
+    }
+    autoChooseCasualties(tid, side, order) {
+      return this.chooseCasualties(tid, side, this.defaultCasualties(tid, side, order));
+    }
+    _maybeApplyCasualties(b) {
+      const P = b.pending;
+      if (!P || !P.choice[b.attacker] || !P.choice[b.defender]) return;
+      const remove = (side, counts, into) => {
+        const lost = [];
+        for (const t in counts) {
+          const pool = this.unitsAt(b.tid, side).filter(u => u.type === t);
+          for (const u of pool.slice(0, counts[t])) { into.push(u.type); lost.push(u.type); this._removeUnit(u.id); }
+        }
+        return lost;
+      };
+      const attLost = remove(b.attacker, P.choice[b.attacker], b.attCas);
+      const defLost = remove(b.defender, P.choice[b.defender], b.defCas);
+      b.round += 1;
+      b.last = { att: P.att, def: P.def, attLost, defLost };
+      b.pending = null;
+      this._checkBattleEnd(b);
     }
 
     _round(b, attOrder, defOrder) {
@@ -570,7 +662,7 @@
     retreatOptions(tid) {
       const p = this.s.current;
       const b = this.s.battles.find(x => x.tid === tid && !x.done);
-      if (!b || b.attacker !== p || b.round < 1) return [];
+      if (!b || b.attacker !== p || b.round < 1 || b.pending) return [];
       const origins = new Set(this.unitsAt(tid, p).map(u => u.origin).filter(Boolean));
       return [...origins].filter(t => !this.hostileTo(p, t) && this.owner(t) === p);
     }
@@ -589,6 +681,17 @@
     }
 
     // ----------------------------------------------------------- phase flow
+    /** Whether the current phase may end now (the UI greys out its button otherwise). */
+    canEndPhase() {
+      const s = this.s;
+      if (s.winner) return fail('The game is over.');
+      if (s.phase === 'combat') {
+        const open = s.battles.filter(b => !b.done);
+        if (open.length) return fail(`Resolve every battle first: ${open.map(b => this.T[b.tid].name).join(', ')}.`);
+      }
+      return ok();
+    }
+
     endPhase() {
       const s = this.s;
       if (s.winner) return fail('The game is over.');
@@ -604,8 +707,8 @@
           this._setupCombat();
           return ok();
         case 'combat': {
-          const open = s.battles.filter(b => !b.done);
-          if (open.length) return fail(`Resolve all battles first (${open.map(b => this.T[b.tid].name).join(', ')}).`);
+          const can = this.canEndPhase();
+          if (!can.ok) return can;
           s.phase = 'noncombatMove';
           this.takeSnapshot();
           return ok();

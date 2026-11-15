@@ -16,6 +16,7 @@
   let errMsg = '';
   let focusBattle = null;
   let cpuTimer = null;
+  let casDraft = {};       // 'tid|side' -> { type: n } while a player picks casualties
   let animFocus = [];      // territories brightened while an action animates
   let animSkip = new Set(); // unit ids drawn as moving tokens instead of in place
   const SETTINGS_KEY = 'laxis-onallies-settings-v1';
@@ -213,7 +214,9 @@
     $('undoMoveBtn').style.display = isMovingPhase() ? '' : 'none';
     const endBtn = $('endBtn');
     endBtn.textContent = endLabel();
-    endBtn.disabled = !!s.winner || isCpuTurn();
+    const can = game.canEndPhase();
+    endBtn.disabled = !!s.winner || isCpuTurn() || !can.ok;
+    endBtn.title = can.ok ? '' : can.error;
     // map
     const battleT = new Set((s.battles || []).filter(b => !b.done).map(b => b.tid));
     // brighten: destinations while a territory is picked, otherwise every territory with units that can move
@@ -573,8 +576,13 @@
         h += `<div class="help">${SIDE[b.attacker].name} (attacking) — ${lostText(b.last.attLost)}</div>${diceByType(b.last.att, 'att', b.attacker)}`;
         h += `<div class="help">${SIDE[b.defender].name} (defending) — ${lostText(b.last.defLost)}</div>${diceByType(b.last.def, 'def', b.defender)}`;
       }
-      if (!b.done) {
-        h += `<div class="row"><button class="primary" data-roll="${b.tid}">Roll ${b.round ? 'next round' : 'first round'}</button><button data-auto="${b.tid}">Fight to the end</button></div>`;
+      if (b.pending) {
+        h += `<div class="roundhead">Round ${b.round + 1} — choose casualties</div>`;
+        h += `<div class="help">${SIDE[b.attacker].name} (attacking) scored ${b.pending.hits[b.defender]} hit(s)</div>${diceByType(b.pending.att, 'att', b.attacker)}`;
+        h += `<div class="help">${SIDE[b.defender].name} (defending) scored ${b.pending.hits[b.attacker]} hit(s)</div>${diceByType(b.pending.def, 'def', b.defender)}`;
+        for (const side of [b.attacker, b.defender]) h += casualtyPicker(b, side);
+      } else if (!b.done) {
+        h += `<div class="row"><button class="primary" data-roll="${b.tid}">Roll ${b.round ? 'next round' : 'first round'}</button><button data-auto="${b.tid}" title="Roll until it's decided; each side loses its cheapest units first">Fight to the end (auto losses)</button></div>`;
         const ro = game.retreatOptions(b.tid);
         if (ro.length) {
           h += `<div class="help">Or retreat: all your surviving attackers pull back to a territory they attacked from.</div><div class="row">`;
@@ -585,6 +593,31 @@
       }
       h += '</div>';
     }
+    return h;
+  }
+  function casualtyPicker(b, side) {
+    const P = b.pending;
+    const color = side === Z ? 'zom' : side === 'LAX' ? 'lax' : 'ona';
+    if (P.choice[side]) {
+      const c = P.choice[side];
+      const txt = Object.keys(c).map(k => `${c[k]} ${UNITS[k].name}`).join(', ') || 'nothing';
+      return `<div class="help"><b style="color:var(--${color})">${SIDE[side].name}</b> will lose: ${txt}.</div>`;
+    }
+    const key = b.tid + '|' + side;
+    const draft = casDraft[key] || (casDraft[key] = game.defaultCasualties(b.tid, side));
+    const have = game.countBy(game.unitsAt(b.tid, side));
+    const need = P.hits[side];
+    const total = Object.values(draft).reduce((a, n) => a + n, 0);
+    const cpuSide = side !== Z && cpu[side];
+    let h = `<div class="caspick card"><h3 style="color:var(--${color})">${SIDE[side].name}: choose ${need} casualt${need === 1 ? 'y' : 'ies'}${cpuSide ? ' (computer)' : ''}</h3>`;
+    for (const t of Object.keys(have).sort((a, b2) => E.CASUALTY_ORDER.indexOf(a) - E.CASUALTY_ORDER.indexOf(b2))) {
+      const n = draft[t] || 0;
+      h += `<div class="row"><span class="name">${UNITS[t].name} <small>(${have[t]} here)</small></span><span class="stepper">
+        <button data-cas="${key}|${t}" data-d="-1" ${n ? '' : 'disabled'}>−</button><output>${n}</output>
+        <button data-cas="${key}|${t}" data-d="1" ${n < have[t] && total < need ? '' : 'disabled'}>+</button></span></div>`;
+    }
+    h += `<div class="row"><button class="primary" data-casok="${key}" ${total === need ? '' : 'disabled'}>Remove these ${need}</button>
+      <span class="help">${total === need ? '' : `pick ${need - total} more`}</span></div></div>`;
     return h;
   }
   function resultText(b) {
@@ -620,7 +653,30 @@
       const target = side.querySelector(`[data-wftarget="${from}"]`).value;
       act(game.fireWall(from, target));
     });
-    side.querySelectorAll('[data-roll]').forEach(b => b.onclick = () => { focusBattle = b.dataset.roll; act(game.battleRound(b.dataset.roll)); });
+    side.querySelectorAll('[data-roll]').forEach(b => b.onclick = () => {
+      const tid = b.dataset.roll;
+      focusBattle = tid;
+      casDraft = {};
+      const res = game.battleRoll(tid);
+      if (res.ok) for (const pc of game.pendingCasualtyChoices()) if (pc.tid === tid && cpu[pc.side]) game.autoChooseCasualties(tid, pc.side);
+      act(res);
+    });
+    side.querySelectorAll('[data-cas]').forEach(b => b.onclick = () => {
+      const [tid, sd, type] = b.dataset.cas.split('|');
+      const key = tid + '|' + sd;
+      const d = casDraft[key] || {};
+      d[type] = Math.max(0, (d[type] || 0) + Number(b.dataset.d));
+      casDraft[key] = d;
+      render();
+    });
+    side.querySelectorAll('[data-casok]').forEach(b => b.onclick = () => {
+      const key = b.dataset.casok;
+      const [tid, sd] = key.split('|');
+      const res = game.chooseCasualties(tid, sd, casDraft[key] || {});
+      if (res.ok) delete casDraft[key];
+      act(res);
+      if (res.ok) scheduleCpu();
+    });
     side.querySelectorAll('[data-auto]').forEach(b => b.onclick = () => { focusBattle = b.dataset.auto; act(game.autoResolve(b.dataset.auto)); });
     side.querySelectorAll('[data-retreat]').forEach(b => b.onclick = () => {
       const before = positions();
@@ -751,7 +807,8 @@
     const before = positions();
     const phase = game.s.phase;
     const rounds = Object.fromEntries((game.s.battles || []).map(b => [b.tid, b.round]));
-    AI.step(game);
+    const res = AI.step(game, { isCpu: (sd) => sd === Z || !!cpu[sd] });
+    if (res && res.waiting) { render(); return; } // a human is choosing casualties
     save();
     const d = stepDelay();
     // keep the battle being fought in view

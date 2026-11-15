@@ -30,6 +30,7 @@ An area-control war game set in **La Crosse** and **Onalaska, Wisconsin**. La Cr
 | Hover a bright territory | Preview the route |
 | Click a bright territory | Move the picked units there |
 | ↶ Undo move / Reset phase | Take back the last move / the whole phase |
+| Battles | Roll a round, then each side picks its own casualties (pre-filled cheapest-first). "Fight to the end" auto-picks. The next-phase button stays grey until every battle is resolved. |
 | Drag, scroll wheel, +/− | Pan and zoom |
 
 ## The game in one minute

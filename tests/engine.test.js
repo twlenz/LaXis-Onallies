@@ -183,6 +183,70 @@ test('player vs player combat follows A&A: casualties removed, territory capture
   assert.equal(h.zombiesAt('ODT').length, 0);
 });
 
+test('each side chooses its own casualties after the dice; the phase cannot end until done', () => {
+  const g = newGame();
+  skipTo(g, 'combatMove');
+  g.s.players.LAX.oil = 2;
+  assert.ok(g.move(ids(g, 'LDT', 'LAX', 'tank'), 'LDT', 'ODT').ok);
+  assert.ok(g.move(ids(g, 'LN', 'LAX', 'inf'), 'LN', 'ODT').ok);
+  g.endPhase();
+  assert.equal(g.canEndPhase().ok, false, 'battle unresolved');
+  rig(g, [1, 1, /* defenders */ 1, 6, 6]); // LAX 2 hits, ONA 1 hit
+  assert.ok(g.battleRoll('ODT').ok);
+  assert.ok(g.casualtyChoiceNeeded('ODT', 'LAX'));
+  assert.ok(g.casualtyChoiceNeeded('ODT', 'ONA'));
+  assert.deepEqual(g.retreatOptions('ODT'), [], 'no retreat mid-round');
+  assert.equal(g.battleRoll('ODT').ok, false, 'cannot roll again before choosing');
+  assert.ok(g.chooseCasualties('ODT', 'LAX', { tank: 1 }).ok, 'LAX keeps its infantry, loses the tank');
+  assert.equal(g.chooseCasualties('ODT', 'ONA', { inf: 1 }).ok, false, 'must take exactly 2');
+  assert.equal(g.chooseCasualties('ODT', 'ONA', { tank: 2 }).ok, false, 'only has 1 tank');
+  assert.ok(g.chooseCasualties('ODT', 'ONA', { inf: 1, tank: 1 }).ok);
+  assert.deepEqual(g.countBy(g.unitsAt('ODT', 'LAX')), { inf: 1 });
+  assert.deepEqual(g.countBy(g.unitsAt('ODT', 'ONA')), { inf: 1 });
+  const b = g.s.battles.find(x => x.tid === 'ODT');
+  assert.deepEqual(b.last.attLost, ['tank']);
+  assert.equal(b.round, 1);
+  assert.deepEqual(g.retreatOptions('ODT'), ['LN'], 'only the surviving infantry came from LN');
+});
+
+test('computer attacker waits for a human defender to choose casualties', () => {
+  const AI = require('../game/js/ai.js');
+  const g = newGame();
+  skipTo(g, 'noncombatMove');
+  g.endPhase(); // -> Onalaska's turn
+  skipTo(g, 'combatMove');
+  g.s.players.ONA.oil = 5;
+  // La Crosse defends LN with infantry + tank so it has a real choice
+  g._addUnit('tank', 'LAX', 'LN');
+  g._addUnit('inf', 'LAX', 'LN');
+  assert.ok(g.move(ids(g, 'ODT', 'ONA'), 'ODT', 'LN').ok);
+  g.endPhase();
+  rig(g, [1, 6, 6, /* La Crosse */ 6, 6, 6]); // Onalaska scores 1 hit: La Crosse picks infantry or tank
+  const humanLAX = { isCpu: (side) => side !== 'LAX' };
+  let r, n = 0;
+  do { r = AI.step(g, humanLAX); } while (!(r && r.waiting) && g.s.phase === 'combat' && n++ < 20);
+  const pend = g.pendingCasualtyChoices();
+  assert.ok(r && r.waiting, 'computer stops and waits');
+  assert.deepEqual(pend.map(x => x.side), ['LAX']);
+  assert.ok(AI.step(g, humanLAX).waiting, 'still waiting until the human picks');
+  assert.ok(g.chooseCasualties(pend[0].tid, 'LAX', { tank: 1 }).ok, 'human sacrifices the tank');
+  assert.deepEqual(g.countBy(g.unitsAt('LN', 'LAX')), { inf: 2 });
+  assert.equal(g.pendingCasualtyChoices().length, 0);
+});
+
+test('forced casualties need no choice', () => {
+  const g = newGame();
+  g._addUnit('zombie', 'Z', 'FI');
+  skipTo(g, 'combatMove');
+  g.move(ids(g, 'LDT', 'LAX', 'inf'), 'LDT', 'FI');
+  g.endPhase();
+  rig(g, [6, 6, 1]); // LAX misses twice; zombie hits once: only infantry there, so no choice
+  g.battleRoll('FI');
+  assert.equal(g.casualtyChoiceNeeded('FI', 'LAX'), false);
+  assert.equal(g.casualtyChoiceNeeded('FI', 'Z'), false);
+  assert.equal(g.unitsAt('FI', 'LAX').length, 1);
+});
+
 test('aircraft crash if they do not end at a landing site', () => {
   const g = newGame();
   g.s.territories.FI.owner = 'LAX';

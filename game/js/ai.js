@@ -116,8 +116,13 @@
     return null;
   }
 
-  function combat(g) {
+  function combat(g, opts) {
     const s = g.s;
+    const isCpu = (opts && opts.isCpu) || (() => true);
+    // casualties: pick for sides the computer plays; wait for humans to pick theirs
+    const pend = g.pendingCasualtyChoices();
+    for (const pc of pend) if (isCpu(pc.side)) return g.autoChooseCasualties(pc.tid, pc.side);
+    if (pend.length) return { ok: false, waiting: true };
     for (const wf of s.wallFire) {
       if (wf.fired) continue;
       const tgt = wf.targets.slice().sort((a, b) => g.zombiesAt(b).length - g.zombiesAt(a).length)[0];
@@ -129,7 +134,7 @@
       const def = g.unitsAt(b.tid, b.defender).map(u => u.type);
       const ro = g.retreatOptions(b.tid);
       if (ro.length && b.round > 0 && simulate(att, def, 40) < 0.35) return g.retreat(b.tid, ro[0]);
-      return g.battleRound(b.tid);
+      return g.battleRoll(b.tid);
     }
     return null;
   }
@@ -168,14 +173,15 @@
     return null;
   }
 
-  function step(g) {
+  /** opts.isCpu(side): which sides the computer decides for (default: all). */
+  function step(g, opts) {
     const s = g.s;
     if (s.winner) return { ok: false, error: 'over' };
     let r = null;
     switch (s.phase) {
       case 'purchase': r = purchase(g); break;
       case 'combatMove': r = combatMove(g); break;
-      case 'combat': r = combat(g); break;
+      case 'combat': r = combat(g, opts); if (r && r.waiting) return r; break;
       case 'noncombatMove': r = noncombat(g); break;
       case 'zombieMove':
         if (s.zombieController && !s._aiZombieMoved) {
