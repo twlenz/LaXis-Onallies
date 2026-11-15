@@ -32,7 +32,8 @@ def kwik(csvpath):
     for r in csv.DictReader(open(csvpath)):
         la, lo = float(r["Latitude"]), float(r["Longitude"])
         if S < la < N and W < lo < E:
-            rows.append({k: r[k] for k in ("Store Number", "Store Name", "Address", "City", "Latitude", "Longitude", "Sells Gas")})
+            rows.append({k: r[k] for k in ("Store Number", "Store Name", "Address", "City", "Latitude", "Longitude", "Sells Gas",
+                                           "Car Wash", "Sells Diesel", "Sells DEF", "Sells E85", "Sells CNG", "Sells LNG")})
     with open(OUT / "kwiktrips.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader(); w.writerows(rows)

@@ -114,7 +114,7 @@ function boardSVG(map, opts = {}) {
     const [x, y] = t.label;
     const fs1 = t.area > 9000 ? 13 : t.area > 3000 ? 10.5 : 8.8;
     o.push(`<text x="${x}" y="${y - 4}" font-size="${fs1}" text-anchor="middle" fill="${COLORS.ink}" stroke="#fffaf0" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${esc(t.short || t.name)}</text>`);
-    if (t.value || t.kwikTrips) o.push(`<g transform="translate(${x},${y + 9}) scale(1.3)">${badgeRow(t.value, t.kwikTrips, 7.5).svg}</g>`);
+    if (t.value || t.oil) o.push(`<g transform="translate(${x},${y + 9}) scale(1.3)">${badgeRow(t.value, t.oil ? 1 : 0, 7.5).svg}</g>`);
     let ix = x - 10;
     for (const sp of t.special || []) {
       const icon = { cityhall: ICONS.star, airport: ICONS.plane, gundersen: ICONS.cross }[sp];
@@ -142,7 +142,7 @@ function cartouche(x0, y0, W, H) {
     <g transform="translate(20,116)">${wallBar(16, false)}</g><text x="34" y="120">Wall piece (W#)</text>
     <g transform="translate(142,116)">${wallBar(16, true)}</g><text x="156" y="120">Highway gate</text>
     <path d="M12,134 h14" stroke="${COLORS.zom}" stroke-width="2.4" stroke-dasharray="4 3" marker-end="url(#zarr)" opacity=".5"/><text x="34" y="137">Zombies march this way</text>
-    <g transform="translate(19,152)">${require('../game/js/art.js').BARREL}</g><text x="34" y="155">Oil (one per Kwik Trip)</text>
+    <g transform="translate(19,152)">${require('../game/js/art.js').BARREL}</g><text x="34" y="155">Oil: 1 per turn (big Kwik Trip)</text>
     <g transform="translate(19,170)">${ICONS.star}</g><text x="34" y="173">City Hall (new units)</text>
     <g transform="translate(140,152)">${ICONS.plane}</g><text x="152" y="155">Airport</text>
     <g transform="translate(140,170)">${ICONS.cross}</g><text x="152" y="173">Gundersen helipad</text>

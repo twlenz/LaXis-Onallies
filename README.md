@@ -37,9 +37,9 @@ An area-control war game set in **La Crosse** and **Onalaska, Wisconsin**. La Cr
 ## The game in one minute
 
 - **The board:** 16 La Crosse neighborhoods, 12 Onalaska neighborhoods and 2 territories on French Island sit inside a wall. Three rings of territories surround them to the north, east and south, including Holmen, Midway, Medary, Shelby and Barre Mills. A three-territory spoke runs west across the Cass Street bridge: Pettibone, La Crescent and the Minnesota Bluffs.
-- **Win:** own every territory inside the wall with no zombies inside, and hold that for a full round.
-- **Units:** infantry, tanks (1 oil to move in a turn; oil comes from Kwik Trips), La Crosse's **Gundersen Helicopter** and Onalaska's **Plane** (also 1 oil to move in a turn). Aircraft can only be bought and flown while you hold the **airport on French Island**.
-- **Zombies** attack at 3 and defend at 2. Each round, every one of the six outer-ring outskirts rolls round ÷ 2 dice (rounded up) on its own, and every 6 is a new zombie there. Zombies march **one ring inward per turn** with no decisions to make.
+- **Win:** own every territory inside the wall with no zombies inside, and hold that for two full rounds.
+- **Units:** infantry, tanks (1 oil to move in a turn; oil comes from the 9 territories with the biggest Kwik Trips), La Crosse's **Gundersen Helicopter** and Onalaska's **Plane** (also 1 oil to move in a turn). Aircraft can only be bought and flown while you hold the **airport on French Island**.
+- **Zombies** attack at 3 and defend at 2. Each round, every zombie outskirt (the six outer-ring territories plus the Minnesota Bluffs) rolls round ÷ 2 dice (rounded up) on its own, and every 6 is a new zombie there. Zombies march **one ring inward per turn** with no decisions to make.
 - **The wall and its gates:** there is no wall between the two cities. Your land units can leave or enter the city only at **highway gates**: WI-35 and US-53 north; I-90, WI-16 and State Road east; Mormon Coulee Road south; the Cass Street bridge west. A torn-down segment also lets units through. Zombies spend a turn next to the wall, tear it down the next turn, then walk in. Walls are never rebuilt. Units that stay put fire over intact walls, and the zombies can't hit back.
 - **Rising dead:** units you lose when zombies beat you, or when you attack zombies and lose or retreat, become zombies.
 - **Defeat:** end your turn without your City Hall and you're out. Your survivors turn, and **you command the horde** for the rest of the game.

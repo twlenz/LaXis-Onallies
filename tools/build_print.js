@@ -135,12 +135,12 @@ function playerAid() {
   const setup = (g) => MAP.territories.filter(t => t.group === g).map(t => {
     const su = t.startUnits || {};
     const units = Object.keys(su).map(k => `${su[k]} ${UNITS[k].name}`).join(', ') || '—';
-    return `<tr><td>${t.name}</td><td>${t.value}</td><td>${t.kwikTrips || ''}</td><td>${units}</td></tr>`;
+    return `<tr><td>${t.name}</td><td>${t.value}</td><td>${t.oil ? 1 : ''}</td><td>${units}</td></tr>`;
   }).join('');
   const spawns = MAP.territories.filter(t => t.spawn).sort((a, b) => a.spawn - b.spawn).map(t => t.name).join(' · ');
-  const outside = MAP.territories.filter(t => t.group === 'OUT' && !t.spawn).map(t => `${t.name} (${t.value}${t.kwikTrips ? ', ' + t.kwikTrips + ' oil' : ''})`).join(' · ');
+  const outside = MAP.territories.filter(t => t.group === 'OUT' && !t.spawn).map(t => `${t.name} (${t.value}${t.oil ? ', 1 oil' : ''})`).join(' · ');
   const income = (g) => MAP.territories.filter(t => t.group === g).reduce((s, t) => s + t.value, 0);
-  const oil = (g) => MAP.territories.filter(t => t.group === g).reduce((s, t) => s + t.kwikTrips, 0);
+  const oil = (g) => MAP.territories.filter(t => t.group === g).reduce((s, t) => s + (t.oil ? 1 : 0), 0);
   return `<!doctype html><html><head><style>${BASE_CSS} ol{margin:2pt 0 4pt 16pt;padding:0;font-size:9.5pt} li{margin:1pt 0} p{font-size:9.5pt;margin:3pt 0} .two{display:grid;grid-template-columns:1fr 1fr;gap:14pt}</style></head><body>
   <div class="page">
     <h1><span class="lax">LaXis</span> &amp; <span class="ona">OnAllies</span> — Player Aid</h1>
@@ -152,7 +152,7 @@ function playerAid() {
       <li><b>Combat</b>: wall fire first, then battles.</li>
       <li><b>Noncombat move</b> (units that didn't move or fight). Aircraft must land.</li>
       <li><b>Mobilize</b> at your City Hall (★).</li>
-      <li><b>Collect</b> SP + 1 oil per Kwik Trip in territories you control.</li>
+      <li><b>Collect</b> SP + 1 oil per oil territory (barrel) you control.</li>
     </ol></div><div>
     <h2>Zombie turn</h2><ol>
       <li><b>March</b> 1 territory inward along the arrow. If the arrow crosses an intact wall, <b>tear it down</b> instead.</li>
@@ -169,7 +169,7 @@ function playerAid() {
     <h2>Who rises</h2>
     <p>Land units you lose <b>when zombies beat you</b>, or <b>when you attack zombies and lose or retreat</b>, become zombies in that territory. Losses in battles you win stay dead. Aircraft never rise. Player-vs-player losses never rise.</p>
     <h2>Winning and losing</h2>
-    <p><b>Win:</b> own every inside territory (both cities and French Island), zero zombies inside the wall, at the end of your turn <i>and</i> at the start of your next.</p>
+    <p><b>Win:</b> own every inside territory (both cities and French Island), zero zombies inside the wall, at the end of your turn, then <i>still</i> at the start of your next <b>two</b> turns (any slip resets the count).</p>
     <p><b>Lose:</b> end your turn without control of your City Hall, or with no land units. Your units become zombies and <b>you command the horde</b>: move zombies 1 space anywhere (not through intact walls), or tear down an adjacent wall instead of moving.</p>
   </div>
   <div class="page">
