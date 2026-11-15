@@ -244,19 +244,76 @@ def main():
             cs.append(min(near, key=lambda t: abs(t - e)) if near else e)
         return cs
 
+    # Rings 2 and 3: wedges by compass bearing from the city centre, sized to hold equal land,
+    # with cuts nudged off the highways (so roads run through territories, not along borders).
+    # (Cutting these by nearest wall point gave slivers east of the concave Valley View corner.)
+    centre = inside_main.centroid
+    R_FAR = 80.0
+
+    def bearing(x, y):
+        b = math.degrees(math.atan2(x - centre.x, -(y - centre.y)))  # 0 = north, clockwise
+        return b + 360 if b < -120 else b                           # south-west sorts after south
+
+    def wedge(b0, b1):
+        steps = max(2, int(b1 - b0))
+        pts = [(centre.x, centre.y)]
+        for i in range(steps + 1):
+            b = math.radians(b0 + (b1 - b0) * i / steps)
+            pts.append((centre.x + R_FAR * math.sin(b), centre.y - R_FAR * math.cos(b)))
+        return Polygon(pts).buffer(0)
+
+    hw_bearings = []
+    for _, rt, ln in road_geoms:
+        if rt not in "IUS":
+            continue
+        for i in range(0, 201):
+            pt = ln.interpolate(i / 200, normalized=True)
+            if 1.0 < pt.distance(inside_main) < 9.0:
+                hw_bearings.append(bearing(pt.x, pt.y))
+
+    def angular_bounds(band, n):
+        areas = [(b, band.intersection(wedge(b, b + 1)).area) for b in range(-120, 240)]
+        total = sum(a for _, a in areas)
+        cuts, acc, j = [], 0.0, 1
+        for b, a in areas:
+            acc += a
+            while j < n and acc >= total * j / n:
+                cuts.append(b + 1)
+                j += 1
+        first = next(b for b, a in areas if a > 0)
+        last = max(b for b, a in areas if a > 0) + 1
+        nudged = []
+        for c in cuts:  # move each cut to the nearest bearing at least 4 degrees from any highway
+            best = c
+            for d in sorted(range(-12, 13), key=abs):
+                if all(abs(c + d - h) >= 4 for h in hw_bearings):
+                    best = c + d
+                    break
+            nudged.append(best)
+        return [first] + sorted(nudged) + [last]
+
     for k, band in enumerate(bands):
         n = C.RING_SECTORS[k]
-        cs = even_nudged(n) if k == 2 else centres_for(n)
-        bounds = [0.0] + [(cs[i] + cs[i + 1]) / 2 for i in range(n - 1)] + [1.0001]
+        if k == 0:
+            cs = centres_for(n)
+            bounds = [0.0] + [(cs[i] + cs[i + 1]) / 2 for i in range(n - 1)] + [1.0001]
+        else:
+            bounds = angular_bounds(band, n)
         for j in range(n):
             lo, hi = bounds[j], bounds[j + 1]
-            sector = unary_union([c for c, t in cell_t if lo <= t < hi])
+            if k == 0:
+                sector = unary_union([c for c, t in cell_t if lo <= t < hi])
+                tmid, brg = cs[j], None
+            else:
+                sector = wedge(lo, hi)
+                brg = (lo + hi) / 2
+                tmid = brg
             g = band.intersection(sector)
             parts = sorted(polys(g), key=lambda p: -p.area)
             if not parts:
                 continue
             tid = f"r{k + 1}_{j + 1}"
-            terr[tid] = dict(id=tid, group="OUT", inside=False, ring=k + 1, sector=j, tmid=cs[j],
+            terr[tid] = dict(id=tid, group="OUT", inside=False, ring=k + 1, sector=j, tmid=tmid, bearing=brg,
                              geom=parts[0], crumbs=parts[1:])
             out_ids.append(tid)
 
@@ -422,7 +479,7 @@ def main():
         g = T["geom"]
         found = [p for p in C.PLACES if g.covers(Point(*km(p[1], p[2])))]
         found.sort(key=lambda p: -p[3])
-        dir_name = sector_dir(T["tmid"])
+        dir_name = bearing_dir(T["bearing"]) if T.get("bearing") is not None else sector_dir(T["tmid"])
         if found:
             T["name"] = found[0][0]
         elif T["ring"] == 1:
@@ -536,6 +593,11 @@ def main():
     rep.append(f"territories {len(out_t)}  walls {len(walls_out)}  gates {sum(w['gate'] for w in walls_out)}  kwik trips {len(kt_out)}")
     (DATA / "report.txt").write_text("\n".join(rep))
     print("\n".join(rep))
+
+
+def bearing_dir(b):
+    names = ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"]
+    return names[int(((b % 360) + 22.5) // 45) % 8]
 
 
 def sector_dir(t):

@@ -28,31 +28,31 @@ ona_south          ONA r0 v2 kt0 sp- South Onalaska                     next=ona
 ona_i90            ONA r0 v2 kt1 sp- Oak Forest & I-90                  next=ona_downtown adj=lax_grandcrossing,ona_crossing,ona_downtown,ona_eastmain,ona_menards,ona_south
 fi_airport         FI  r0 v2 kt0 sp- La Crosse Regional Airport         next=fi_westlax adj=fi_westlax
 fi_westlax         FI  r0 v1 kt1 sp- West La Crosse (French Island)     next=ona_south adj=fi_airport,lax_logan,ona_south
-r1_1               OUT r1 v1 kt0 sp- Midway                             next=ona_north adj=ona_north,r1_2,r2_1
+r1_1               OUT r1 v1 kt0 sp- Midway                             next=ona_north adj=ona_north,r1_2,r2_1,r2_2
 r1_10              OUT r1 v1 kt1 sp- South Side Outskirts               next=lax_south adj=lax_hintgen,lax_south,lax_stateroad,r1_9,r2_8
-r1_2               OUT r1 v1 kt0 sp- North End Outskirts                next=ona_north adj=ona_greencoulee,ona_north,r1_1,r1_3,r2_1,r2_2
-r1_3               OUT r1 v1 kt0 sp- Sand Lake Coulee                   next=ona_greencoulee adj=ona_greencoulee,ona_theater,r1_2,r1_4,r2_2
-r1_4               OUT r1 v1 kt0 sp- Hwy 16 East Outskirts              next=ona_hwy16 adj=ona_hwy16,ona_theater,r1_3,r1_5,r2_3
-r1_5               OUT r1 v1 kt0 sp- Valley View East                   next=lax_valleyview adj=lax_valleyview,ona_hwy16,r1_4,r1_6,r2_4
-r1_6               OUT r1 v1 kt0 sp- Valley View Outskirts              next=lax_valleyview adj=lax_valleyview,r1_5,r1_7,r2_4,r2_5
-r1_7               OUT r1 v1 kt0 sp- Grand Crossing Outskirts           next=lax_grandcrossing adj=lax_bluff,lax_grandcrossing,r1_6,r1_8,r2_5
-r1_8               OUT r1 v1 kt0 sp- Bliss Road                         next=lax_bluff adj=lax_bluff,r1_7,r1_9,r2_6
-r1_9               OUT r1 v1 kt0 sp- State Road Outskirts               next=lax_stateroad adj=lax_stateroad,r1_10,r1_8,r2_7
+r1_2               OUT r1 v1 kt0 sp- North End Outskirts                next=ona_north adj=ona_greencoulee,ona_north,r1_1,r1_3,r2_2
+r1_3               OUT r1 v1 kt0 sp- Sand Lake Coulee                   next=ona_greencoulee adj=ona_greencoulee,ona_theater,r1_2,r1_4,r2_2,r2_3
+r1_4               OUT r1 v1 kt0 sp- Hwy 16 East Outskirts              next=ona_hwy16 adj=ona_hwy16,ona_theater,r1_3,r1_5,r2_3,r2_4
+r1_5               OUT r1 v1 kt0 sp- Valley View East                   next=lax_valleyview adj=lax_valleyview,ona_hwy16,r1_4,r1_6,r2_4,r2_5
+r1_6               OUT r1 v1 kt0 sp- Valley View Outskirts              next=lax_valleyview adj=lax_valleyview,r1_5,r1_7,r2_5,r2_6
+r1_7               OUT r1 v1 kt0 sp- Grand Crossing Outskirts           next=lax_grandcrossing adj=lax_bluff,lax_grandcrossing,r1_6,r1_8,r2_6
+r1_8               OUT r1 v1 kt0 sp- Bliss Road                         next=lax_bluff adj=lax_bluff,r1_7,r1_9,r2_6,r2_7
+r1_9               OUT r1 v1 kt0 sp- State Road Outskirts               next=lax_stateroad adj=lax_stateroad,r1_10,r1_8,r2_7,r2_8
 w_pettibone        OUT r1 v1 kt0 sp- Pettibone Park (Barron Island)     next=lax_downtown adj=lax_downtown,w_lacrescent
-r2_1               OUT r2 v3 kt2 sp- Holmen                             next=r1_1 adj=r1_1,r1_2,r2_2,r3_1
-r2_2               OUT r2 v1 kt0 sp- North Coulees                      next=r1_3 adj=r1_2,r1_3,r2_1,r2_3,r3_1,r3_2
-r2_3               OUT r2 v1 kt0 sp- Northeast Coulees                  next=r1_4 adj=r1_4,r2_2,r2_4,r3_2,r3_3
-r2_4               OUT r2 v1 kt0 sp- Medary                             next=r1_5 adj=r1_5,r1_6,r2_3,r2_5,r2_6,r3_3,r3_4
-r2_5               OUT r2 v1 kt0 sp- Hixon Forest                       next=r1_7 adj=r1_6,r1_7,r2_4,r2_6
-r2_6               OUT r2 v1 kt0 sp- Southeast Coulees                  next=r1_8 adj=r1_8,r2_4,r2_5,r2_7,r3_5
-r2_7               OUT r2 v1 kt0 sp- Shelby                             next=r1_9 adj=r1_9,r2_6,r2_8,r3_5,r3_6
-r2_8               OUT r2 v1 kt0 sp- Mt. La Crosse                      next=r1_10 adj=r1_10,r2_7,r3_6
+r2_1               OUT r2 v3 kt2 sp- Holmen                             next=r1_1 adj=r1_1,r2_2,r3_1
+r2_2               OUT r2 v1 kt0 sp- Halfway Creek                      next=r1_2 adj=r1_1,r1_2,r1_3,r2_1,r2_3,r3_1
+r2_3               OUT r2 v1 kt0 sp- Northeast Coulees                  next=r1_3 adj=r1_3,r1_4,r2_2,r2_4,r3_2
+r2_4               OUT r2 v1 kt0 sp- Medary                             next=r1_4 adj=r1_4,r1_5,r2_3,r2_5,r3_3
+r2_5               OUT r2 v1 kt0 sp- East Coulees                       next=r1_5 adj=r1_5,r1_6,r2_4,r2_6,r3_4
+r2_6               OUT r2 v1 kt0 sp- Hixon Forest                       next=r1_7 adj=r1_6,r1_7,r1_8,r2_5,r2_7,r3_4,r3_5
+r2_7               OUT r2 v1 kt0 sp- Shelby                             next=r1_8 adj=r1_8,r1_9,r2_6,r2_8,r3_5,r3_6
+r2_8               OUT r2 v1 kt0 sp- Mt. La Crosse                      next=r1_10 adj=r1_10,r1_9,r2_7,r3_6
 w_lacrescent       OUT r2 v2 kt2 sp- La Crescent, MN                    next=w_pettibone adj=w_mnbluffs,w_pettibone
 r3_1               OUT r3 v0 kt1 sp1 Brice Prairie                      next=r2_1 adj=r2_1,r2_2,r3_2
-r3_2               OUT r3 v0 kt0 sp2 North Farmland                     next=r2_2 adj=r2_2,r2_3,r3_1,r3_3
-r3_3               OUT r3 v0 kt2 sp3 Barre Mills                        next=r2_4 adj=r2_3,r2_4,r3_2,r3_4,r3_5
-r3_4               OUT r3 v0 kt0 sp4 East Farmland                      next=r2_4 adj=r2_4,r3_3,r3_5
-r3_5               OUT r3 v0 kt0 sp5 St. Joseph Ridge                   next=r2_7 adj=r2_6,r2_7,r3_3,r3_4,r3_6
+r3_2               OUT r3 v0 kt0 sp2 Mindoro Road                       next=r2_3 adj=r2_3,r3_1,r3_3
+r3_3               OUT r3 v0 kt2 sp3 West Salem                         next=r2_4 adj=r2_4,r3_2,r3_4
+r3_4               OUT r3 v0 kt0 sp4 Barre Mills                        next=r2_5 adj=r2_5,r2_6,r3_3,r3_5
+r3_5               OUT r3 v0 kt0 sp5 St. Joseph Ridge                   next=r2_6 adj=r2_6,r2_7,r3_4,r3_6
 r3_6               OUT r3 v0 kt0 sp6 Chipmunk Coulee                    next=r2_8 adj=r2_7,r2_8,r3_5
 w_mnbluffs         OUT r3 v0 kt0 sp- Minnesota Bluffs                   next=w_lacrescent adj=w_lacrescent
 W1   lax_bluff|r1_7                 
